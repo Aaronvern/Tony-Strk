@@ -146,8 +146,11 @@ obscura --stealth --proxy socks5://127.0.0.1:9050 \
 
 ## Docs
 
+**New here? Read [`docs/START-HERE.md`](docs/START-HERE.md)** — the product, the technical core, current state, and how to get running, in about ten minutes.
+
 | Doc | What's in it |
 |---|---|
+| [`START-HERE.md`](docs/START-HERE.md) | ⭐ onboarding — read this first |
 | [`PLAN.md`](docs/PLAN.md) | the product, architecture, scope, schedule |
 | [`PRIVACY-STACK.md`](docs/PRIVACY-STACK.md) | how it's private — the five channels, in depth |
 | [`THREAT-MODEL.md`](docs/THREAT-MODEL.md) | adversaries, precise claims, the hard questions answered |
