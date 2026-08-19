@@ -1,0 +1,21 @@
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+
+# secrets — never commit keys, funded accounts, or wallet material
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+wallet-data/
+
+# browser / tooling artifacts
+.playwright/
+playwright-report/
+test-results/
+tor-data/
+.DS_Store

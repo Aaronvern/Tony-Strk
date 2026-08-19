@@ -1,0 +1,171 @@
+# Day-1 Spike Results — 2026-08-14
+
+Goal: prove the tooling is real *before* betting 18 days on it, and close the biggest open risk — **can a headless server do STRK20 private payments on mainnet without self-hosting a prover?**
+
+**Verdict: the stack is real, the headless path is architecturally open, and the spike found a privacy primitive that upgrades the product (shadow accounts).** One dependency remains, with a concrete workaround.
+
+---
+
+## 1. Environment — all green
+
+| Check | Result |
+| --- | --- |
+| Node 24 (required by `ohttp-ts`) | ✅ **v24.19.0 installed** via nvm (was 22.14.0 — blocker cleared) |
+| Starknet mainnet RPC | ✅ Lava, dRPC, Cartridge, PublicNode all return `SN_MAIN` (Blast is dead) |
+| `starknet-privacy` repo | ✅ clones; Cairo contracts + Rust crates + TS SDK + demo + e2e |
+| Privacy SDK deps | ✅ `npm ci` → 365 packages, clean |
+| `starknet.js` with STRK20 API | ✅ **10.7.0** installs (needs `^10.4.0`; latest tag is 10.0.2 → **pin `starknet@10.7.0`**) |
+
+---
+
+## 2. The STRK20 Wallet API is real — exact surface (verified in `.d.ts`)
+
+`WalletAccountV6` (starknet.js 10.7.0) exposes the privacy protocol directly:
+
+| Method | What it does |
+| --- | --- |
+| `strk20Balances(tokens)` | private balances held **inside** the pool |
+| `strk20PrepareInvoke(actions, simulate?)` | returns `{ call, proof }` — builds the call + **SNIP-36 ZK proof** |
+| `strk20InvokeTransaction(actions)` | submit actions atomically (wallet shows approval) |
+| `executeWithProof(calls, proof)` | execute arbitrary calls with a privacy proof attached |
+| `strk20ShadowAccountCommitment(dappName, nonce?)` | derive/recognize **shadow accounts** (see §3) |
+
+Actions: `STRK20_DEPOSIT_ACTION` (shield), `STRK20_WITHDRAW_ACTION` (unshield), `STRK20_TRANSFER_ACTION` (private send), `STRK20_INVOKE_ACTION`, `STRK20_SHADOW_ACCOUNT_INVOKE_ACTION`.
+
+Under the hood it's a standard wallet JSON-RPC method — `wallet_strk20PrepareInvoke` — so **any** wallet implementing the spec works; we are not locked to one vendor.
+
+**Notable:** the spec defines an `Errors.PRIVACY_LEAK` error — the wallet itself **refuses operations that would leak privacy**. Protocol-level protection against our own bugs, and a strong talking point.
+
+---
+
+## 3. 🔑 Major find: **Shadow accounts** — per-dapp, unlinkable identities
+
+This is the primitive the product was missing, and it's built into STRK20:
+
+> `strk20ShadowAccountCommitment(dappName, nonce)` — *"each nonce selects a distinct shadow account for this user + DAPP."* Omitting the nonce yields a **partial commitment**, which *"can be published once to let a DAPP recognize all the shadow accounts of a user without learning any individual nonce."*
+
+Why this matters for Tony Stark:
+
+- The agent can transact from a **fresh shadow account per task or per site** — mutually unlinkable, and unlinkable to the user's real account.
+- `STRK20_SHADOW_ACCOUNT_INVOKE_ACTION` lets the agent **invoke arbitrary contract calls through that shadow account** — so it isn't just payments; any on-chain interaction is compartmentalized.
+- The **partial commitment** solves a real UX problem: *we* can recognize "this is one of our user's shadow accounts" (to credit their balance) **without learning which one, and without linking them to each other.** That is exactly the "metered service that can't profile you" property §3 of the threat model promises — now protocol-backed rather than self-imposed.
+
+**Design change:** shadow accounts become a core part of the architecture, not a stretch goal.
+
+---
+
+## 4. The headless question — architecturally open, one dependency
+
+`WalletAccountV6` takes `walletProvider: WalletWithStarknetFeatures` — a **plain object interface**, *not* `window.starknet`. `StarknetInjectedWallet` is merely one implementation that wraps an injected object. So starknet.js does **not** require a browser.
+
+But the privacy work (keys, notes, **proving**) lives *behind* that interface, which leaves three routes:
+
+| Route | Requires | Assessment |
+| --- | --- | --- |
+| **A. Drive a real wallet inside our own browser** — run the Ready/Xverse extension in the Playwright instance we're already building | Playwright + extension automation | ⭐ **Recommended.** We're building headless-browser infra anyway; the wallet does the proving; we never hold keys. Elegant reuse. |
+| **B. Implement the wallet side ourselves** with `starknet-privacy` SDK | a `PROVING_SERVICE_URL` | Cleanest for a server, but needs a hosted prover URL from StarkWare (**not public** — confirmed). |
+| **C. Self-host the prover** | Pathfinder mainnet full node | ❌ Off the table in 18 days. |
+
+**Plan: pursue A, request B's endpoint in parallel.**
+
+---
+
+## 5. Compliance is mandatory, not optional (confirmed)
+
+> *"a deposit is only accepted with a screening signature"* — the screening service screens the depositing address and **signs** the deposit; the prover attaches it.
+
+You cannot bypass screening even by self-hosting. This **confirms** the "private by default, compliant by design" positioning — and means our shield flow depends on the screening path working, which is a integration detail to verify early.
+
+---
+
+## 6. Still open
+
+1. **No public proving/discovery URL or mainnet pool address is documented** — must come from StarkWare (Proof of Privacy / builders group). Route A avoids needing it.
+2. **Route A not yet executed** — driving the Ready extension programmatically is the next spike.
+3. `@starkware-libs/starknet-privacy-sdk` is **not on npmjs** (GitHub Packages or git-SHA install).
+
+---
+
+---
+
+# SPIKE 2 — Headless + real wallet + hosted infra (same day)
+
+**Verdict: the two biggest risks are now closed.** Headless operation is *proven by execution*, and the "missing" hosted prover/discovery infrastructure **exists, is public, and is live**.
+
+## 8. ✅ PROVEN: headless works (executed, not theorized)
+
+Implemented `WalletWithStarknetFeatures` as a plain Node object — the entire Starknet surface is a **single `request()` function** — handed it to `WalletAccountV6`, and ran it on Node 24. **No browser, no `window.starknet`.**
+
+All four privacy calls round-tripped successfully:
+
+| starknet.js call | wire method | params sent |
+| --- | --- | --- |
+| `strk20Balances([STRK])` | `wallet_strk20Balances` | `{tokens:[...]}` |
+| `strk20ShadowAccountCommitment('tonyStark','0x0')` | `wallet_strk20ShadowAccountCommitment` | `{dapp_name, nonce}` |
+| `strk20PrepareInvoke(actions)` | `wallet_strk20PrepareInvoke` | `{actions:[...]}` |
+| `strk20InvokeTransaction(actions)` | `wallet_strk20InvokeTransaction` | `{actions:[...]}` |
+
+Note: starknet.js converts camelCase→snake_case on the wire and normalizes the returned call (`contract_address`→`contractAddress`). Script: `scratchpad/wallet-api-probe/mock-wallet-spike.mjs`.
+
+**⇒ We can write our own wallet adapter and run the whole payment layer server-side.**
+
+## 9. Real wallet check — Ready/Argent X v5.33.8 (downloaded & unpacked)
+
+| Method | Implemented in shipping extension? |
+| --- | --- |
+| `wallet_strk20PrepareInvoke` | ✅ yes |
+| `wallet_strk20Balances` | ✅ yes |
+| `wallet_strk20InvokeTransaction` | ✅ yes |
+| `wallet_strk20ShadowAccountCommitment` | ❌ **no — absent** |
+
+Also present: `strk20`/`STRK20` (12 files), `shielded`, `privacyPool`, `viewingKey`, a `ViewingKeyService`, and a `privacyPoolViewingKey` backend endpoint.
+
+### ⚠️ Correction to Spike 1
+
+I previously promoted **shadow accounts to core architecture**. That was premature: the method is in the *spec and starknet.js*, but **not in the shipping wallet**. Demoted to **roadmap/stretch**, contingent on wallet support (or on us implementing the wallet side ourselves, where we control it). The privacy design must not depend on it for the hackathon.
+
+## 10. 🎯 Found the "missing" hosted infrastructure — and it's LIVE
+
+The prover/discovery URLs that are undocumented publicly are **embedded in the shipping Ready extension**:
+
+| Service | URL | Status |
+| --- | --- | --- |
+| **Prover (Sepolia, StarkWare)** | `https://transaction-prover.alpha-sepolia.sw-dev.io` | ✅ `/health` `{"status":"ok"}`; JSON-RPC live |
+| **Discovery (Sepolia, StarkWare)** | `https://discovery-service.alpha-sepolia.sw-dev.io` | ✅ live **and synced** — `chain_head` advancing, `lag_secs: 5` |
+| **Prover (production, Ready)** | `https://cloud.argent-api.com/v1/privacy/proving` | ✅ `/health` `{"status":"ok"}`; **answers unauthenticated JSON-RPC** (see correction below) |
+| **Discovery (production, Ready)** | `https://cloud.argent-api.com/v1/privacy/discovery` | ✅ live and synced (mainnet chain head, ~5s lag) |
+
+### ⚠️ Correction — these are NOT auth-gated
+
+An earlier run of this spike hit a transient `{"message":"Internal server error"}` on the production prover's `/health` and I concluded it was auth-gated. **That was wrong.** On re-check, the production prover answers an unauthenticated `starknet_proveTransaction` request **identically** to the open Sepolia one (HTTP 200, `missing field 'transaction'` param validation).
+
+**What this does and does not establish:**
+- ✅ Established: the endpoint is reachable and parses unauthenticated JSON-RPC.
+- ❓ **Unverified:** whether it will accept and complete a *real* proving job unauthenticated — rate limits, origin checks, or auth on actual work could still apply.
+- ⚖️ Regardless: this is **a third party's production infrastructure** (Ready's). Even where technically open, we ask before depending on it, and we do not build a product on someone else's unbudgeted compute.
+
+**Implication if it holds:** the fully-headless mainnet path (Route B on mainnet, no wallet in the loop) may be viable — which would be a materially better product. Test with one real proof before believing it.
+
+**Proof these are the official StarkWare services:** the live prover's `/ohttp-keys` returns
+`ACkAACBBhSMg/zZ0lfpSLJTLg685Hk6JAYOSclu/IJjdkxvEJAAEAAEAAQ==` — an **exact byte-for-byte match** with the pinned `VITE_OHTTP_KEY_CONFIG` in `starknet-privacy/demo/.env.example`. Same infrastructure the SDK repo ships against. OHTTP is live in production.
+
+The prover's JSON-RPC validates requests progressively (`missing block_id` → `missing transaction`), confirming `starknet_proveTransaction` is real and functional — not a stub.
+
+## 11. What this changes
+
+- **Route B is now viable for development**: point the SDK's `ProvingServiceProofProvider` + `IndexerDiscoveryProvider` at the **Sepolia** endpoints. No Pathfinder, no self-hosting, no waiting on anyone. **We can build the full payment layer immediately.**
+- **Mainnet is still the open item**: Sepolia is dev infra; Ready's production endpoints are auth-gated. Mainnet therefore needs **Route A** (drive the Ready extension, which holds the credentials) or an access request via Proof of Privacy.
+- **Recommended architecture:** build server-side against Sepolia hosted infra (fast iteration, fully headless), keep the wallet adapter behind an interface, and swap in Route A for the mainnet demo.
+
+*Usage note: these are dev endpoints. We use them for development at modest volume and don't treat them as a production SLA.*
+
+## 12. Actions
+
+- [x] Node 24 installed; RPCs verified; SDK installs
+- [x] STRK20 wallet API surface mapped
+- [x] **Headless proven by execution** (mock wallet, 4/4 methods)
+- [x] Ready extension audited — 3/4 methods shipped, **no shadow accounts**
+- [x] **Live hosted prover + discovery found and verified (Sepolia)**
+- [ ] **Next:** wire the real SDK to the Sepolia prover/discovery → a genuine end-to-end shielded transfer on Sepolia
+- [ ] Human: request **mainnet** prover/discovery access (Proof of Privacy) — the last mainnet gap
+- [ ] Pin `starknet@10.7.0`; Node 24 in CI

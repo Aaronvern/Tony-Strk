@@ -1,0 +1,22 @@
+{
+  "name": "tony-strk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An AI agent that browses and pays for the web anonymously — remote MCP server on shielded STRK20 (Starknet)",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "spike:wallet": "node scripts/spikes/mock-wallet-spike.mjs",
+    "spike:services": "node scripts/spikes/check-services.mjs"
+  },
+  "dependencies": {
+    "starknet": "10.7.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
