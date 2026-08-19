@@ -31,9 +31,11 @@ Everything else is normal engineering; *this* is the part that must work. We use
 | 6 | ✅ Hosted infra verified: prover `transaction-prover.alpha-sepolia.sw-dev.io`, discovery `discovery-service.alpha-sepolia.sw-dev.io` | [ME] | `npm run spike:services` passes |
 | 7 | ✅ **Pool addresses** recovered + verified on-chain, both networks | [ME] | in `.env.example` |
 | 8 | ✅ **Prove an action** against the hosted prover | [ME] | real proof returned, facts present |
-| 9 | ⬜ **Wire the AVNU paymaster** — the only submission path for a server-side agent (`SdkWallet` + `AvnuPaymaster` from the client package) | [ME] | a proven tx lands on-chain |
-| 10 | ⬜ **Shield: deposit STRK** — needs `invoke_and_apply_action`, and exercises mandatory screening | [ME] | `Deposit` event on-chain |
+| 9 | ✅ **AVNU paymaster wired** (`SdkWallet` + `AvnuPaymaster`) — needs `AVNU_API_KEY` from portal.avnu.fi | [ME] | proven tx lands on-chain |
+| 10 | ✅ **Shielded 3 STRK — screening passed** ([`0x3e74d5…`](https://sepolia.starkscan.co/tx/0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349)) | [ME] | on-chain ✅ |
 | 11 | ⬜ **Private transfer**, then read the private balance back via discovery | [ME] | balance moves, nothing leaks on the explorer |
+
+✅ **Phase 1's gate is passed** — the money path works end to end. Everything downstream is ordinary engineering.
 
 ✅ **Gate:** when step 10 passes, the product is real. If the SDK fights us here, we learn it on Day 2, not Day 15.
 
