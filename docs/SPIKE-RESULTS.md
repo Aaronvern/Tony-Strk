@@ -159,7 +159,50 @@ The prover's JSON-RPC validates requests progressively (`missing block_id` → `
 
 *Usage note: these are dev endpoints. We use them for development at modest volume and don't treat them as a production SLA.*
 
-## 12. Actions
+---
+
+# SPIKE 3 — Pool addresses found and verified
+
+**Verdict: every external dependency is now identified and verified live.** Run `npm run spike:services` to reproduce all of it.
+
+## 13. 🎯 The privacy pool addresses
+
+Not published in any doc we could find. Recovered by mining **AVNU's production bundle** (they run private swaps on mainnet, so their app must know the pool), which yielded a config block `privacy:{[net]:{poolAddress:…}}` resolving to two constants:
+
+| Network | Privacy pool address | Class hash | Verified |
+| --- | --- | --- | --- |
+| **Mainnet** | `0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a` | `0x67dddd89d80fedadc06b6f160798f94800a4a70164e5a24301cd0d6076b554d` | ✅ on-chain |
+| **Sepolia** | `0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91` | `0x56ab118a8a6e38efc93ad758cefe909fee421fa931ce3cf72df624d345623b2` | ✅ on-chain + discovery |
+
+Note both class hashes differ from the `0x52107fad…` in the SDK repo's README (that was tag `PRIVACY-0.14.3-RC.0`), so the deployed pools run a newer revision than the repo's pinned table. Pin the SDK to match the deployment, not the README.
+
+## 14. ✅ Discovery verified end-to-end (with a control)
+
+Querying `/v1/sync/incoming_state` against the Sepolia pool returns a **valid empty result set** — real `block_ref`, empty `channels`/`notes` (correct for a dummy viewing key):
+
+```
+HTTP 200  {"block_ref":"0x7e72…","channels":[],"subchannels":[],"notes":[],"cursor":{…}}
+```
+
+And the **control** — the same service given the *mainnet* pool address:
+
+```
+HTTP 400  {"error":{"code":"CONTRACT_NOT_FOUND","message":"Contract not found at the configured address"}}
+```
+
+The control matters: without it, a 200 could mean "accepts anything" and would prove nothing. The service genuinely validates the pool and genuinely serves ours.
+
+## 15. Auth status — refined
+
+- Ready's **prover/discovery RPC**: answers unauthenticated.
+- Ready's **`/v1/privacy/*` config API**: returns **401 Unauthorized**.
+- Their mainnet discovery currently self-reports `"status":"UNHEALTHY"` — a reminder not to build on a third party's service we don't operate.
+
+## 16. Screening — what's left to test
+
+Deposit screening (a sanctions check that signs the deposit, mandatory even when self-hosting) **cannot be exercised without a funded account**: it runs inside the prover during a real `starknet_proveTransaction` for a deposit action. It is therefore the *first* thing Phase 1 must prove, not something we can pre-verify. Expected failure mode if it rejects: JSON-RPC error `10000`.
+
+## 17. Actions
 
 - [x] Node 24 installed; RPCs verified; SDK installs
 - [x] STRK20 wallet API surface mapped
