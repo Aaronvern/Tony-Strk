@@ -95,8 +95,9 @@ Building in public, daily. Honest state:
 - [x] **Anonymous browsing proven end-to-end** — Obscura → Tor returns `{"IsTor":true}` from the Tor Project's own API
 - [x] Sepolia account funded (faucet script) and **deployed** — can sign
 - [x] **Real ZK proof from StarkWare's hosted prover** — `apply_actions`, proof facts present
-- [ ] Submit a proven transaction (needs the AVNU paymaster) ← *next*
-- [ ] **Shielded deposit** (tests screening) → private transfer  ← *the gate*
+- [x] **Submission via the AVNU paymaster** — proven transaction accepted on-chain
+- [x] 🎉 **Shielded deposit landed, sanctions screening passed** — [`0x3e74d5…`](https://sepolia.starkscan.co/tx/0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349)
+- [ ] Private transfer ← *next (pool is funded)*
 - [ ] MCP server + `balance` / `topup`
 - [ ] Payment loop + STRK20 paywall + gasless settlement
 - [ ] Anonymous browsing worker

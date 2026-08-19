@@ -111,15 +111,25 @@ Every deposit is screened against sanctions lists before a proof is issued — m
 | Hosted prover + discovery | ✅ live, synced, OHTTP verified official |
 | Privacy pool contracts | ✅ verified on-chain, both networks |
 | Anonymous browsing | ✅ Obscura → Tor returns `IsTor:true` |
-| Sepolia account | ✅ funded + deployed, can sign |
-| **Real ZK proof from the hosted prover** | ✅ **proving works** — `apply_actions`, facts present |
-| Submitting a proven tx | ⬜ needs the AVNU paymaster ← **next** |
-| Shielded deposit (screening) + private transfer | ⬜ blocked on submission |
+| Sepolia account | ✅ funded + deployed |
+| Real ZK proof from the hosted prover | ✅ proving works |
+| Submission via AVNU paymaster | ✅ works |
+| **Shielded deposit on-chain** | ✅ **3 STRK shielded** |
+| **Sanctions screening** | ✅ **passed** |
+| Private transfer | ⬜ next (pool is funded) |
 | MCP server, hero loop, mainnet | ⬜ to build |
 
-Until that shielded transfer lands, treat everything as provisional.
+**The money path works end to end** — SDK → hosted prover → ZK proof → paymaster → pool → Starknet:
 
-**Known risks:** deposit screening is untestable from outside (it runs inside the prover during a deposit, so it's one step behind submission); anonymity-set size means our privacy is only as strong as the shared pool's participation; ~11 days left, and if we slip, the *browsing* layer gets cut, not the payment path.
+```
+tx 0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349
+```
+
+Screening was the one link nobody could test from outside — it runs *inside* the prover during a deposit — and it passed. Every hard unknown in the design is now closed; what remains is ordinary engineering.
+
+Reassuring side note: the pool holds **~212,000 STRK** across its users. That's the anonymity set we hide in — a real crowd, not a ghost town.
+
+**Known risks:** anonymity-set size still bounds how strong our privacy claim can be; the Sepolia fee quote (below) is not a real cost, so don't model economics on it; ~11 days left, and if we slip, the *browsing* layer gets cut, not the payment path.
 
 ---
 
@@ -157,15 +167,20 @@ obscura --stealth --proxy socks5://127.0.0.1:9050 \
 3. **Node 24 or nothing** — `ohttp-ts` needs its WebCrypto.
 4. **Starknet accounts must be deployed** before they can sign; an address exists counterfactually and fails confusingly until then.
 5. **The privacy SDK isn't on npm** — install from GitHub Packages or a git SHA.
-6. **The viewing key must be ≤ `CURVE.n / 2`** — half the curve order. A raw Poseidon digest overflows it about half the time and the pool rejects it with `PRIVATE_KEY_NOT_CANONICAL`.
-7. **Errors surface from the prover, not the chain.** A failed action reverts inside the prover's *virtual* block, so the tx hash in the error doesn't exist on Starknet — don't look it up on an explorer. Decode the felt in the revert reason instead.
-8. **Never claim more privacy than we've verified.** If it's not in the "verified" table above, it's not a claim.
+6. **A first deposit must be larger than the fee.** The paymaster settles its fee by *withdrawing from the pool*, and Sepolia quotes a flat **2 STRK**. The deposit and the fee-withdraw are proven together, so the deposit funds the fee — but only if it's bigger. Deposit 1 against a 2 STRK fee and you get `Insufficient balance … total available: 0`, which reads like an empty wallet and is really a bootstrapping problem.
+7. **Prove against `latest - 12`, never `latest`.** The sequencer rejects a proof whose base block is too recent (`The proof block number … is too recent`). This is the 10-block rule as a hard failure, not a warning.
+8. **The 2 STRK fee is a testnet quote**, not a real cost. Don't model per-payment economics on it — mainnet needs re-measuring.
+9. **The viewing key must be ≤ `CURVE.n / 2`** — half the curve order. A raw Poseidon digest overflows it about half the time → `PRIVATE_KEY_NOT_CANONICAL`. (The client package derives it from a passphrase, so this only bites on the raw-SDK path.)
+10. **Errors surface from the prover, not the chain.** A failed action reverts inside the prover's *virtual* block, so the tx hash in the error doesn't exist on Starknet — don't look it up on an explorer. Decode the felt in the revert reason instead.
+11. **Never claim more privacy than we've verified.** If it's not in the "verified" table above, it's not a claim.
 
 ---
 
 ## 7. What to pick up
 
 Ordered by what the score rewards. See [`BUILD-STEPS.md`](BUILD-STEPS.md) for the full task list with owners.
+
+Now that the money path works, the payment layer is a **real dependency you can build against** rather than a stub — `scripts/submit-via-paymaster.mjs` is a working reference for shielding, and the same `SdkWallet` handles transfers.
 
 - **MCP server skeleton** — transport, tool registry, `node:sqlite` metering ledger (no identity column), worker isolation. Good first task; independent of the money path.
 - **The STRK20 paywall endpoint** — a small service that returns 402 with a price and unlocks on payment. This is the hero demo's other half.
