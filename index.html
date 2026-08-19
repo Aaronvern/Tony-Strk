@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Tony Strk is an MCP-facing private browsing concept built around disposable workers and Tor egress." />
+    <title>Tony Strk — Browse without a trail</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="wordmark" href="#top" aria-label="Tony Strk home">TONY <span>STRK</span></a>
+      <nav aria-label="Primary navigation">
+        <a href="#route">Route</a>
+        <a href="#mcp">MCP</a>
+        <a href="#boundary">Boundary</a>
+      </nav>
+      <span class="build-badge">WEB2 / BUILD 01</span>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">PRIVATE BROWSING / MCP INTERFACE</p>
+          <h1 id="hero-title">BROWSE<br />WITHOUT<br />A TRAIL.</h1>
+          <p class="hero-deck">A clean interface for routing AI web requests through a disposable worker and Tor. Payments stay out of this prototype—STRK20 comes next.</p>
+          <div class="hero-actions">
+            <a class="button button-solid" href="#route">Run route preview <span aria-hidden="true">↘</span></a>
+            <a class="text-link" href="https://github.com/Aaronvern/Tony-Strk">View source ↗</a>
+          </div>
+        </div>
+        <figure class="armour-plate">
+          <img src="/tony-strk-armour-blueprint.png" alt="Cobalt halftone engineering print of a complete futuristic armour shell" />
+          <figcaption><span>PLATE 20</span><span>PRIVACY SHELL / FULL ASSEMBLY</span></figcaption>
+        </figure>
+        <p class="hero-index" aria-hidden="true">20</p>
+      </section>
+
+      <section class="manifesto" aria-label="Project statement">
+        <p>THE REQUEST MOVES.</p>
+        <p>YOUR ADDRESS DOESN'T.</p>
+      </section>
+
+      <section class="route-section" id="route" aria-labelledby="route-title">
+        <div class="section-heading">
+          <p class="eyebrow">01 / ROUTE PREVIEW</p>
+          <h2 id="route-title">One request.<br />Four clean hops.</h2>
+          <p>This preview maps the intended Web2 route locally. It does not make a browser request or claim a live privacy connection.</p>
+        </div>
+
+        <div class="route-lab">
+          <form id="route-form">
+            <label for="target-url">Public URL</label>
+            <div class="url-control">
+              <input id="target-url" name="url" type="url" value="https://example.com/research" required />
+              <button type="submit">Map route</button>
+            </div>
+          </form>
+
+          <div class="route-grid" aria-label="Request route">
+            <article><span>01</span><h3>MCP request</h3><p>Client sends a tool call.</p></article>
+            <article><span>02</span><h3>Ephemeral worker</h3><p>Disposable session handles it.</p></article>
+            <article><span>03</span><h3>Tor egress</h3><p>Client IP stays off destination logs.</p></article>
+            <article><span>04</span><h3 id="route-target">example.com</h3><p>Public response returns.</p></article>
+          </div>
+          <p class="route-status" id="route-status" role="status">Ready to map locally. No request will be sent.</p>
+        </div>
+      </section>
+
+      <section class="mcp-section" id="mcp" aria-labelledby="mcp-title">
+        <div>
+          <p class="eyebrow">02 / MCP SURFACE</p>
+          <h2 id="mcp-title">The same route,<br />inside any agent.</h2>
+          <p class="section-copy">The interface becomes one small MCP tool: accept a public URL, return the fetched content, expose the route used. The live server is the next implementation step.</p>
+        </div>
+        <div class="code-card">
+          <div class="code-bar"><span>browse_private.tool</span><button id="copy-tool" type="button">Copy schema</button></div>
+          <pre id="tool-spec"><code>{
+  "name": "browse_private",
+  "input": {
+    "url": "https://example.com"
+  },
+  "route": [
+    "ephemeral-worker",
+    "tor-egress",
+    "public-web"
+  ],
+  "payment": null
+}</code></pre>
+        </div>
+      </section>
+
+      <section class="boundary-section" id="boundary" aria-labelledby="boundary-title">
+        <div class="section-heading">
+          <p class="eyebrow">03 / HONEST BOUNDARY</p>
+          <h2 id="boundary-title">Privacy is a route,<br />not a gradient.</h2>
+        </div>
+        <div class="boundary-grid">
+          <article><span class="card-number">A</span><h3>Disposable session</h3><p>Per-request workers reduce retained state between browsing jobs.</p></article>
+          <article><span class="card-number">B</span><h3>Tor for the open web</h3><p>Arbitrary public sites need an egress network. OHTTP only fits compatible relay-and-gateway endpoints.</p></article>
+          <article><span class="card-number">C</span><h3>Money comes later</h3><p>STRK20 and x402 are intentionally absent from this Web2 build. No fake transactions, hashes, or private-payment claims.</p></article>
+        </div>
+      </section>
+
+      <section class="next-section">
+        <p class="eyebrow">NEXT ASSEMBLY</p>
+        <h2>STRK stays the trail.<br /><span>STRK20 breaks the link.</span></h2>
+        <p>Wallet routing, private invocation, and mainnet proofs enter only when they are real.</p>
+      </section>
+    </main>
+
+    <footer>
+      <a class="wordmark" href="#top">TONY <span>STRK</span></a>
+      <p>Built by <a href="https://github.com/prathadox">prathadox</a> + <a href="https://github.com/Aaronvern">Aaronvern</a></p>
+      <p>STRK20 PRIVATE SPRINT / 2026</p>
+    </footer>
+
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>
