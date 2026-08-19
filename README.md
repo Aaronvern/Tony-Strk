@@ -55,7 +55,7 @@ A user can be traced through **five independent channels**. You're only as priva
 | # | Channel | Closed by |
 |---|---------|-----------|
 | 1 | **Network** (IP, TLS fingerprint) | Tor egress, fresh circuit per task |
-| 2 | **Browser** (fingerprint, cookies) | Obscura — engine-level stealth, fresh context per task, no logins, no persistence |
+| 2 | **Browser** (cookies, persistence) | Obscura `--stealth`, fresh context per task, no logins, nothing survives between tasks |
 | 3 | **On-chain** (balance, amounts, graph) | STRK20 shielded pool — ZK-STARK notes |
 | 4 | **The on-ramp** (public deposit) | shared canonical pool's anonymity set, time-separated |
 | 5 | **The operators** (incl. *us*) | OHTTP, client-side keys, worker isolation, self-hostable |
@@ -91,6 +91,8 @@ Building in public, daily. Honest state:
 - [x] Feasibility spikes — toolchain, SDK, hosted infra all verified ([`docs/SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md))
 - [x] **Headless STRK20 wallet API proven** — all four privacy methods driven from pure Node, no browser
 - [x] Live hosted prover + discovery verified (OHTTP key matches the SDK repo's pinned config)
+- [x] Privacy pool addresses recovered and verified on-chain, both networks
+- [x] **Anonymous browsing proven end-to-end** — Obscura → Tor returns `{"IsTor":true}` from the Tor Project's own API
 - [ ] Shielded deposit + private transfer on Sepolia
 - [ ] MCP server + `balance` / `topup`
 - [ ] Payment loop + STRK20 paywall + gasless settlement
