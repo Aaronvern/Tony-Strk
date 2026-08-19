@@ -4,6 +4,8 @@
 
 The current Web2 demo maps an MCP request through an ephemeral worker and Tor egress. It intentionally does **not** implement STRK20 or x402 payments yet.
 
+**Live demo:** https://tony-strk.vercel.app
+
 > The web sees the suit. Nobody sees the man inside.
 
 A **remote MCP server** that gives any AI agent (Claude, Cursor, …) two powers:

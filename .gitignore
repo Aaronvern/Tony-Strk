@@ -19,3 +19,4 @@ playwright-report/
 test-results/
 tor-data/
 .DS_Store
+.vercel
