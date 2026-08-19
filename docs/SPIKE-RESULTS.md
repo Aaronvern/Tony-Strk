@@ -280,3 +280,46 @@ The Sepolia paymaster requires `x-paymaster-api-key`. Self-service: **https://po
 Set it as `AVNU_API_KEY` and re-run `scripts/submit-via-paymaster.mjs`. That single credential unblocks, in order: on-chain submission → the shielded deposit → **the sanctions-screening test** → the private transfer. In other words, the rest of the money path.
 
 **Note for mainnet:** the same key requirement will apply, so obtaining it now de-risks Phase 5 too.
+
+---
+
+# SPIKE 6 — ✅ The money path works
+
+## 23. A real shielded deposit landed on Sepolia
+
+```
+tx 0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349
+```
+
+<https://sepolia.starkscan.co/tx/0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349>
+
+3 STRK shielded into the STRK20 privacy pool, submitted through the AVNU paymaster in `sponsored_private` mode, accepted on-chain. **Sanctions screening passed** — the one link that could not be tested from outside, because it runs inside the prover during a deposit.
+
+The whole chain is now proven end to end: SDK → hosted prover → ZK proof → paymaster → pool → Starknet.
+
+## 24. Three things that had to be right (record them)
+
+**The fee is withdrawn *from the pool*, so a first deposit must exceed it.** Sepolia quotes a flat **2 STRK** fee, settled as a `withdraw` of the fee token out of the pool. The deposit and the fee-withdraw are proven in the same action set, so the deposit funds the fee — but only if it is larger. Depositing 1 STRK against a 2 STRK fee fails with `Insufficient balance … total available: 0`, which reads like an empty wallet and is really a bootstrapping problem. **Deposit > fee on the first shield.**
+
+**The proof's base block must be old enough.** Proving against `latest` fails at submission:
+
+```
+Invalid proof facts: The proof block number 13729004 is too recent.
+The maximum allowed block number is 13728999.
+```
+
+The sequencer requires the base block to sit ~10 blocks behind the including block. We prove against **`latest - 12`** to leave headroom for proving time and inclusion delay. This is the SDK's documented 10-block rule showing up as a hard failure rather than a warning.
+
+**A flat 2 STRK fee is a testnet quote, not a real cost.** It is far too large to model per-payment economics on; treat mainnet fees as an open question and re-measure before making cost claims.
+
+## 25. What is now proven end to end
+
+| Link | State |
+| --- | --- |
+| Hosted prover generates real proofs | ✅ |
+| AVNU paymaster accepts and submits | ✅ |
+| **Sanctions screening** | ✅ **passed** |
+| Shielded deposit on-chain | ✅ |
+| Private transfer | ⬜ next (pool now funded) |
+
+Nothing external blocks the remaining work. The pool holds a shielded balance, so a private `transfer` is the immediate next step — and it should be cheaper to reason about now that the bootstrapping case is behind us.
