@@ -253,3 +253,30 @@ Submitting means calling `apply_actions` on the pool **with the proof attached t
 Live and reachable: `https://sepolia.paymaster.avnu.fi` (405 to GET — POST-only JSON-RPC, as expected) and `https://sepolia.api.avnu.fi/paymaster/v1/status` (200).
 
 **Next:** wire `@starkware-libs/starknet-privacy-client`'s `SdkWallet` + `AvnuPaymaster`, which implements exactly this flow. Open question: whether the sepolia paymaster needs an API key.
+
+---
+
+# SPIKE 5 — Paymaster submission wired; one credential away
+
+## 21. The full submission stack assembles and reaches the paymaster
+
+Wired `CorePrivateTransfersProver` + `AvnuPaymaster` + `SdkWallet` from `@starkware-libs/starknet-privacy-client` (built from source alongside the SDK) and asked it to shield 1 STRK.
+
+Every layer composed correctly — prover, discovery, pool address, paymaster client, deposit flow selection — and the request reached AVNU's paymaster RPC. It was rejected on **authentication only**:
+
+```
+Paymaster paymaster_buildTransaction:
+  An error occurred (UNKNOWN_ERROR) (code: 163): x-paymaster-api-key is invalid
+```
+
+That is as clean a blocker as you get: everything works except a credential.
+
+**Also confirmed by this run:** the client derives the viewing key from a **passphrase** (`passphraseViewingKeyProvider`), so callers never handle it — and the `CURVE.n/2` canonical-range trap from §19 disappears on this path.
+
+## 22. ⛔ Blocker: AVNU paymaster API key
+
+The Sepolia paymaster requires `x-paymaster-api-key`. Self-service: **https://portal.avnu.fi**. Docs: <https://docs.avnu.fi/docs/paymaster>.
+
+Set it as `AVNU_API_KEY` and re-run `scripts/submit-via-paymaster.mjs`. That single credential unblocks, in order: on-chain submission → the shielded deposit → **the sanctions-screening test** → the private transfer. In other words, the rest of the money path.
+
+**Note for mainnet:** the same key requirement will apply, so obtaining it now de-risks Phase 5 too.
