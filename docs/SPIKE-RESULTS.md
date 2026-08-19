@@ -154,7 +154,7 @@ The prover's JSON-RPC validates requests progressively (`missing block_id` → `
 ## 11. What this changes
 
 - **Route B is now viable for development**: point the SDK's `ProvingServiceProofProvider` + `IndexerDiscoveryProvider` at the **Sepolia** endpoints. No Pathfinder, no self-hosting, no waiting on anyone. **We can build the full payment layer immediately.**
-- **Mainnet is still the open item**: Sepolia is dev infra; Ready's production endpoints are auth-gated. Mainnet therefore needs **Route A** (drive the Ready extension, which holds the credentials) or an access request via Proof of Privacy.
+- **Mainnet is still the open item**: Sepolia is dev infra. Ready's production prover *does* answer unauthenticated RPC (§10 correction), but a full proof round-trip there is unverified and it is a third party's infrastructure — so mainnet still needs either a verified server-side proof, **Route A** (drive the Ready extension), or our own access via Proof of Privacy.
 - **Recommended architecture:** build server-side against Sepolia hosted infra (fast iteration, fully headless), keep the wallet adapter behind an interface, and swap in Route A for the mainnet demo.
 
 *Usage note: these are dev endpoints. We use them for development at modest volume and don't treat them as a production SLA.*

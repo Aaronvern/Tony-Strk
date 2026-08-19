@@ -119,7 +119,7 @@ Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to
 
 | Doc | What's in it |
 |---|---|
-| [`PLAN.md`](docs/PLAN.md) | the product, architecture, scope, 18-day plan |
+| [`PLAN.md`](docs/PLAN.md) | the product, architecture, scope, schedule |
 | [`PRIVACY-STACK.md`](docs/PRIVACY-STACK.md) | how it's private — the five channels, in depth |
 | [`THREAT-MODEL.md`](docs/THREAT-MODEL.md) | adversaries, precise claims, the hard questions answered |
 | [`SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md) | what we verified first-hand, with evidence |

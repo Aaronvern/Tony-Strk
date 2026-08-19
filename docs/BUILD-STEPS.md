@@ -79,7 +79,7 @@ Scope discipline: library defaults for fingerprinting, Tor not residential proxi
 
 ## Phase 5 — Mainnet (Days 15–16) ← **the 30% criterion**
 
-Mainnet proving is auth-gated, so we go **through the wallet** (which legitimately holds the credentials).
+Try the **server-side** route first (the production prover answers unauthenticated RPC — though a real proof there is unverified, and it's a third party's infrastructure). Fall back to going **through the wallet**, which legitimately holds the credentials.
 
 | # | Step | Who | Done when |
 | --- | --- | --- | --- |

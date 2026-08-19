@@ -74,7 +74,7 @@ Four components with clean boundaries:
    - `pay(recipient, amount)` — Layer B confidential outbound payment
    - `policy(rules)` — Agent Wallet controls (per-site cap, domain allowlist, daily cap)
    - `reveal(viewingKey)` — decrypt the user's own spend history (selective disclosure)
-2. **Browser worker pool** (eyes/hands) — **Obscura** (Rust headless engine, Apache-2.0, CDP-compatible), each session in a fresh browser context behind a rotating Tor circuit (`--proxy socks5://`), torn down after use, zero cross-session state. Engine-level stealth + per-session fingerprint randomization + 3,520 blocked tracker domains, and native DOM→Markdown for the agent. Chosen over headless Chromium because **30 MB and instant startup** (vs 200 MB / ~2 s) is what makes a genuinely fresh browser *per task* affordable rather than aspirational — the privacy model depends on never reusing a session. We drive it over CDP from our own MCP server rather than proxying Obscura's built-in MCP, so the isolation boundary stays ours.
+2. **Browser worker pool** (eyes/hands) — **Obscura** (Rust headless engine, Apache-2.0, CDP-compatible), each session in a fresh browser context behind a rotating Tor circuit (`--proxy socks5://`), torn down after use, zero cross-session state. `--stealth` gives a self-consistent fingerprint with no automation tells (plus TLS impersonation and tracker blocking when built with the `stealth` feature), and it emits DOM→Markdown natively for the agent. It is **not** per-session fingerprint randomization — see `PRIVACY-STACK.md` §2.5 for what we do and don't claim. Chosen over headless Chromium because **30 MB and instant startup** (vs 200 MB / ~2 s) is what makes a genuinely fresh browser *per task* affordable rather than aspirational — the privacy model depends on never reusing a session. We drive it over CDP from our own MCP server rather than proxying Obscura's built-in MCP, so the isolation boundary stays ours.
 3. **Wallet / payment service** (the money) — drives the **STRK20 Wallet API** (`starknet@10.7.0`, `WalletAccountV6`), so **keys, notes and proving stay in the user's wallet** (Ready/Argent X or Xverse). We assemble `STRK20_ACTION[]` intents; the wallet returns `{call, proof}` from `strk20PrepareInvoke` (SNIP-36) and we submit via `executeWithProof`. We never custody the spending key or viewing key. Covers shield (`DEPOSIT`), private send (`TRANSFER`), unshield (`WITHDRAW`), `strk20Balances`, and the AVNU `sponsored_private` paymaster. The spec even defines a `PRIVACY_LEAK` error — the wallet refuses privacy-leaking operations.
 3b. **Shadow-account manager** (⚠️ **roadmap, not MVP**) — would derive a **fresh unlinkable shadow account per task/site** (`strk20ShadowAccountCommitment(dappName, nonce)`) and use the **partial commitment** to credit a user **without learning which account or linking them**. **Spike 2 found this method is absent from the shipping Ready wallet v5.33.8**, so the MVP does not depend on it; revisit if wallet support lands or once we run our own wallet adapter.
 4. **Agent Wallet policy engine** — **Ready session keys + SNIP-9 outside execution**: the user grants a policy-scoped session key (per-site cap, domain allowlist, daily cap, expiry, kill switch); the agent spends autonomously *within* it, gaslessly via the paymaster. This is how §7's `policy` tool is enforced without us holding funds.
@@ -153,17 +153,24 @@ await transfers.build({ autoDiscover: { notes: "refresh", channels: "refresh" },
 
 ---
 
-## 8. 18-day plan (leaderboard-aware — ship thin early, push daily)
+## 8. Schedule — 12 days remaining (as of Aug 19; deadline Aug 31)
 
-- **Day 1:** create public repo + README + **application PR** (leaderboard entry). Bring up local **devnet** + local prover/discovery from the repo; land one **devnet** private transfer via the SDK end-to-end. Bump to Node 24. **Spike the wallet-delegated proving path** (Ready/Argent X Privacy Wallet API) — the primary mainnet route. In parallel: request the Proof-of-Privacy hosted endpoints as a fallback.
-- **Days 2–5:** MCP server skeleton + `topup`/`balance` backed by a real shielded balance on devnet (Layer A). Ship public.
-- **Days 6–10:** `pay` tool — private `transfer` to **our own STRK20-denominated Starknet paywall endpoint**; wire AVNU `sponsored_private` paymaster (Layer B, the hero loop).
-- **Days 11–14:** `browse`/`extract` via Obscura+Tor (CDP); Agent Wallet `policy` layer via **Ready session keys + SNIP-9**.
-- **Days 15–16:** **flip to mainnet via the wallet-delegated path** (or hosted endpoints); do the real mainnet shielded payment; harden.
-- **Day 17:** viewing-key `reveal` UI, docs, architecture diagram, 2-min demo video.
-- **Day 18:** buffer + final push.
+The sprint was announced Aug 13 as 18 days. We entered on Aug 19, so the plan below is re-anchored to real calendar dates. Leaderboard ranks by most-recent push, so **something ships every day.**
 
-The mainnet flip is Days 15–16 *only if* endpoints arrive earlier; if they're available sooner, move it up. Everything before that is devnet so we never block on the dependency.
+**Already done**
+- ✅ Public repo, README, docs, toolchain pinned (Node 24, `starknet@10.7.0`)
+- ✅ Feasibility verified: headless STRK20 wallet API, hosted prover + discovery live, pool addresses recovered and verified on-chain
+- ✅ Anonymous browsing proven end-to-end (Obscura → Tor, `IsTor:true`)
+
+**Remaining**
+- **Aug 19–20 — the money path.** Sepolia account + faucet, register viewing key, **shielded deposit (tests screening)**, private transfer. *This is the gate: until it passes, everything else is provisional.*
+- **Aug 21–23 — MCP server.** Skeleton + `topup`/`balance` on real shielded funds; metering ledger on `node:sqlite`; browsing/payment worker isolation.
+- **Aug 24–26 — the hero loop.** Our own STRK20-priced paywall + `pay` tool + AVNU `sponsored_private` paymaster + batched settlement.
+- **Aug 27–28 — browsing.** `browse`/`extract` over Obscura CDP + Tor; the "what the site sees vs. who you are" reveal.
+- **Aug 29–30 — mainnet + polish.** Real mainnet shielded transfer (tx hash on Starkscan), viewing-key `reveal`, architecture diagram, 2-min demo video.
+- **Aug 31 — buffer + final push.**
+
+**If we slip,** the browsing layer is what gets cut, not the payment path — 60% of the score is STRK20 depth plus a working mainnet product. Note we can develop entirely against StarkWare's hosted **Sepolia** infrastructure, so we are never blocked waiting on anyone.
 
 ---
 

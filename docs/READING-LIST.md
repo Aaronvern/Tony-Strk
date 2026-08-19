@@ -6,7 +6,8 @@ A guided path to understand the product and the tech behind it. Read top-to-bott
 
 ## 0. Our own docs (read these first — they tie everything together)
 
-- **`docs/PLAN.md`** — the whole product: what it is, architecture, 18-day plan, scope, risks, and why we win. ⭐
+- **`docs/PLAN.md`** — the whole product: what it is, architecture, schedule, scope, risks, and why we win. ⭐
+- **`docs/PRIVACY-STACK.md`** — how it's actually private: the five channels, precisely what we claim and what we don't. ⭐
 - **`docs/THREAT-MODEL.md`** — the adversarial hardening: who can deanonymize the user and how we stop them, a precise "what's private vs. visible" table, and the 10 hard questions a judge will ask (with answers). ⭐
 
 ---
