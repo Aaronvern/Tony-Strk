@@ -139,6 +139,7 @@ Reassuring side note: the pool holds **~212,000 STRK** across its users. That's 
 git clone git@github.com:Aaronvern/Tony-Strk.git && cd Tony-Strk
 nvm use          # Node 24 — required by ohttp-ts
 npm install
+npm run setup    # clones + builds the privacy SDK (it isn't published to npm)
 
 npm run spike:services   # verifies every external dependency is live
 npm run spike:wallet     # drives the STRK20 wallet API headlessly

@@ -113,6 +113,7 @@ Nothing here is presented as working before it is. Devnet is never shown as main
 ```bash
 nvm use            # Node 24 (required by ohttp-ts)
 npm install
+npm run setup      # builds the privacy SDK from source (not on npm)
 
 npm run spike:services    # verify every external dependency is live
 npm run spike:wallet      # drive the STRK20 wallet API headlessly
