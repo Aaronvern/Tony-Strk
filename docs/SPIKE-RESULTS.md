@@ -62,7 +62,7 @@ But the privacy work (keys, notes, **proving**) lives *behind* that interface, w
 
 | Route | Requires | Assessment |
 | --- | --- | --- |
-| **A. Drive a real wallet inside our own browser** — run the Ready/Xverse extension in the Playwright instance we're already building | Playwright + extension automation | ⭐ **Recommended.** We're building headless-browser infra anyway; the wallet does the proving; we never hold keys. Elegant reuse. |
+| **A. Drive a real wallet extension** — run Ready/Xverse in a headless Chromium | **separate** Chromium + Playwright (Obscura cannot load Chrome extensions) | Fallback only. The wallet does the proving and we never hold keys, but it means a second browser stack purely to host an extension. |
 | **B. Implement the wallet side ourselves** with `starknet-privacy` SDK | a `PROVING_SERVICE_URL` | Cleanest for a server, but needs a hosted prover URL from StarkWare (**not public** — confirmed). |
 | **C. Self-host the prover** | Pathfinder mainnet full node | ❌ Off the table in 18 days. |
 

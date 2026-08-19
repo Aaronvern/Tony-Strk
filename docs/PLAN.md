@@ -74,7 +74,7 @@ Four components with clean boundaries:
    - `pay(recipient, amount)` — Layer B confidential outbound payment
    - `policy(rules)` — Agent Wallet controls (per-site cap, domain allowlist, daily cap)
    - `reveal(viewingKey)` — decrypt the user's own spend history (selective disclosure)
-2. **Browser worker pool** (eyes/hands) — hardened headless Playwright, each session behind a rotating Tor/proxy circuit, torn down after use, zero cross-session state.
+2. **Browser worker pool** (eyes/hands) — **Obscura** (Rust headless engine, Apache-2.0, CDP-compatible), each session in a fresh browser context behind a rotating Tor circuit (`--proxy socks5://`), torn down after use, zero cross-session state. Engine-level stealth + per-session fingerprint randomization + 3,520 blocked tracker domains, and native DOM→Markdown for the agent. Chosen over headless Chromium because **30 MB and instant startup** (vs 200 MB / ~2 s) is what makes a genuinely fresh browser *per task* affordable rather than aspirational — the privacy model depends on never reusing a session. We drive it over CDP from our own MCP server rather than proxying Obscura's built-in MCP, so the isolation boundary stays ours.
 3. **Wallet / payment service** (the money) — drives the **STRK20 Wallet API** (`starknet@10.7.0`, `WalletAccountV6`), so **keys, notes and proving stay in the user's wallet** (Ready/Argent X or Xverse). We assemble `STRK20_ACTION[]` intents; the wallet returns `{call, proof}` from `strk20PrepareInvoke` (SNIP-36) and we submit via `executeWithProof`. We never custody the spending key or viewing key. Covers shield (`DEPOSIT`), private send (`TRANSFER`), unshield (`WITHDRAW`), `strk20Balances`, and the AVNU `sponsored_private` paymaster. The spec even defines a `PRIVACY_LEAK` error — the wallet refuses privacy-leaking operations.
 3b. **Shadow-account manager** (⚠️ **roadmap, not MVP**) — would derive a **fresh unlinkable shadow account per task/site** (`strk20ShadowAccountCommitment(dappName, nonce)`) and use the **partial commitment** to credit a user **without learning which account or linking them**. **Spike 2 found this method is absent from the shipping Ready wallet v5.33.8**, so the MVP does not depend on it; revisit if wallet support lands or once we run our own wallet adapter.
 4. **Agent Wallet policy engine** — **Ready session keys + SNIP-9 outside execution**: the user grants a policy-scoped session key (per-site cap, domain allowlist, daily cap, expiry, kill switch); the agent spends autonomously *within* it, gaslessly via the paymaster. This is how §7's `policy` tool is enforced without us holding funds.
@@ -127,7 +127,9 @@ await transfers.build({ autoDiscover: { notes: "refresh", channels: "refresh" },
 - **The hosted infrastructure exists and is live.** StarkWare's **Sepolia** prover (`transaction-prover.alpha-sepolia.sw-dev.io`) and discovery (`discovery-service.alpha-sepolia.sw-dev.io`) are up, synced (~5s lag), OHTTP-enabled, and verified as official (their `/ohttp-keys` byte-matches the pinned key in the SDK repo's demo env).
 
 **⇒ Route B (our own server-side wallet adapter + hosted prover/discovery) is the build path** — fully headless, no Pathfinder, no blocking dependency, immediate iteration on Sepolia.
-**⇒ For mainnet, test Route B first.** *(Corrected: Ready's production endpoints are **not** auth-gated as first believed — they answer unauthenticated JSON-RPC like the Sepolia ones; see `SPIKE-RESULTS.md` §10.)* If a real proof completes server-side on mainnet, we get the fully-headless product with no wallet in the loop. If it doesn't — or if we're asked not to use that infrastructure — **Route A** (drive the Ready extension in our Playwright browser) is the fallback. Keep the wallet adapter behind an interface so this is a config swap, not a rewrite.
+**⇒ For mainnet, test Route B first.** *(Corrected: Ready's production endpoints are **not** auth-gated as first believed — they answer unauthenticated JSON-RPC like the Sepolia ones; see `SPIKE-RESULTS.md` §10.)* If a real proof completes server-side on mainnet, we get the fully-headless product with no wallet in the loop. If it doesn't — or if we're asked not to use that infrastructure — **Route A** (drive the Ready wallet extension) is the fallback. Keep the wallet adapter behind an interface so this is a config swap, not a rewrite.
+
+⚠️ **Route A now carries a cost.** Obscura is a native Rust engine and **cannot load Chrome extensions**, so Route A would require standing up a *separate* headless Chromium + Playwright purely to host the Ready extension. That's a second browser stack for one job. It doesn't change the browsing decision (Obscura is right for browsing), but it does raise the price of the fallback — one more reason to prove Route B early.
 
 ⇒ **Actions:** (1) Human: request hosted prover/discovery + the mainnet **pool address** from the Proof of Privacy program / builders group as a fallback to the wallet path. (2) Agent: prototype the **wallet-delegated** flow (Ready/Xverse) as the primary mainnet route. Until either is proven, develop on a **local devnet** (the repo fully supports devnet), then flip to mainnet.
 
@@ -142,7 +144,7 @@ await transfers.build({ autoDiscover: { notes: "refresh", channels: "refresh" },
 - Keys + proving **client-side** via Ready/Argent X (or Xverse) — we never custody them.
 - Layer A: shielded prepaid balance + off-chain metering + batched settlement, gasless via `sponsored_private` paymaster.
 - Layer B: the hero loop — a **STRK20-denominated Starknet paywall endpoint we build** + a private `transfer` to unlock it.
-- Minimal Playwright + Tor browser; "what the site sees vs. who you are" reveal.
+- Obscura + Tor browsing worker; "what the site sees vs. who you are" reveal.
 - Viewing-key `reveal` UI.
 
 **Stretch:** Agent Wallet `policy` (Ready session keys); Ekubo private-swap-to-pay; multi-token. **Transparent/off-theme, likely cut:** x402/Base agent-web breadth.
@@ -156,7 +158,7 @@ await transfers.build({ autoDiscover: { notes: "refresh", channels: "refresh" },
 - **Day 1:** create public repo + README + **application PR** (leaderboard entry). Bring up local **devnet** + local prover/discovery from the repo; land one **devnet** private transfer via the SDK end-to-end. Bump to Node 24. **Spike the wallet-delegated proving path** (Ready/Argent X Privacy Wallet API) — the primary mainnet route. In parallel: request the Proof-of-Privacy hosted endpoints as a fallback.
 - **Days 2–5:** MCP server skeleton + `topup`/`balance` backed by a real shielded balance on devnet (Layer A). Ship public.
 - **Days 6–10:** `pay` tool — private `transfer` to **our own STRK20-denominated Starknet paywall endpoint**; wire AVNU `sponsored_private` paymaster (Layer B, the hero loop).
-- **Days 11–14:** `browse`/`extract` via Playwright+Tor; Agent Wallet `policy` layer via **Ready session keys + SNIP-9**.
+- **Days 11–14:** `browse`/`extract` via Obscura+Tor (CDP); Agent Wallet `policy` layer via **Ready session keys + SNIP-9**.
 - **Days 15–16:** **flip to mainnet via the wallet-delegated path** (or hosted endpoints); do the real mainnet shielded payment; harden.
 - **Day 17:** viewing-key `reveal` UI, docs, architecture diagram, 2-min demo video.
 - **Day 18:** buffer + final push.

@@ -68,7 +68,7 @@ Everything else is normal engineering; *this* is the part that must work. We use
 
 | # | Step | Who | Done when |
 | --- | --- | --- | --- |
-| 21 | **Playwright + Tor**, fresh profile + circuit per task, torn down after | [ME] | site logs show a Tor exit, not you |
+| 21 | **Obscura + Tor** (`--proxy socks5://…`), fresh browser context + circuit per task, torn down after | [ME] | site logs show a Tor exit, not you |
 | 22 | **`browse` / `extract`** tools | [ME] | agent reads a page end-to-end |
 | 23 | **"What the site sees vs. who you are"** comparison view | [ME] | demo-ready visual |
 | 24 | *(stretch)* **Agent Wallet policy** — per-site caps, allowlist, daily cap | [ME] | over-limit spend is refused |
@@ -84,7 +84,7 @@ Mainnet proving is auth-gated, so we go **through the wallet** (which legitimate
 | # | Step | Who | Done when |
 | --- | --- | --- | --- |
 | 25 | Install **Ready/Argent X**, enable privacy, fund with **a small amount of real STRK** | [YOU] | mainnet wallet ready |
-| 26 | Drive the Ready extension inside our Playwright browser (Route A) | [ME] | `wallet_strk20PrepareInvoke` returns a real proof |
+| 26 | Prove server-side mainnet proving (Route B). Fallback: drive the Ready extension — needs a **separate** Chromium+Playwright, since Obscura can't load extensions | [ME] | `wallet_strk20PrepareInvoke` returns a real proof |
 | 27 | **One real mainnet shielded transfer** | [BOTH] | tx hash on Starkscan |
 | 28 | Point the hero demo at mainnet; label mainnet vs. devnet **honestly** | [ME] | no devnet shown as mainnet |
 | 29 | *(parallel, from Day 1)* Request **mainnet prover access** via Proof of Privacy | [YOU] | grant received (fallback) |

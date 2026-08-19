@@ -35,7 +35,7 @@ Tony Stark makes agent activity private by default — and auditable *only* by y
        ┌──────┴───────┐          ← the two halves share NO identifier
        ▼              ▼
  Browser worker   Payment worker
-  Playwright       STRK20 shielded
+  Obscura + Tor    STRK20 shielded
   + Tor            pool (ZK-STARK)
        │              │
        ▼              ▼
@@ -55,7 +55,7 @@ A user can be traced through **five independent channels**. You're only as priva
 | # | Channel | Closed by |
 |---|---------|-----------|
 | 1 | **Network** (IP, TLS fingerprint) | Tor egress, fresh circuit per task |
-| 2 | **Browser** (fingerprint, cookies) | ephemeral hardened Playwright, no logins, no persistence |
+| 2 | **Browser** (fingerprint, cookies) | Obscura — engine-level stealth, fresh context per task, no logins, no persistence |
 | 3 | **On-chain** (balance, amounts, graph) | STRK20 shielded pool — ZK-STARK notes |
 | 4 | **The on-ramp** (public deposit) | shared canonical pool's anonymity set, time-separated |
 | 5 | **The operators** (incl. *us*) | OHTTP, client-side keys, worker isolation, self-hostable |
@@ -126,7 +126,7 @@ Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to
 
 ## Built on
 
-[STRK20](https://www.starknet.io/blog/make-all-erc-20-tokens-private-with-strk20/) · [starknet-privacy](https://github.com/starkware-libs/starknet-privacy) · [starknet.js](https://starknetjs.com) · [AVNU Paymaster](https://github.com/avnu-labs/paymaster) · [OHTTP](https://www.rfc-editor.org/rfc/rfc9458) · [MCP](https://modelcontextprotocol.io) · Playwright · Tor
+[STRK20](https://www.starknet.io/blog/make-all-erc-20-tokens-private-with-strk20/) · [starknet-privacy](https://github.com/starkware-libs/starknet-privacy) · [starknet.js](https://starknetjs.com) · [AVNU Paymaster](https://github.com/avnu-labs/paymaster) · [OHTTP](https://www.rfc-editor.org/rfc/rfc9458) · [MCP](https://modelcontextprotocol.io) · [Obscura](https://github.com/h4ckf0r0day/obscura) · Tor
 
 ## License
 
