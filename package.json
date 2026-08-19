@@ -14,7 +14,7 @@
     "spike:services": "node scripts/spikes/check-services.mjs"
   },
   "dependencies": {
-    "starknet": "10.7.0"
+    "starknet": "^10.7.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
