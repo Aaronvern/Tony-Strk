@@ -78,7 +78,7 @@ Not a mixer. STRK20 screens every deposit against sanctions lists before a proof
 | Private payment | `transfer` (pool-native: fully private) · `withdraw` (external: sender-anonymous) |
 | Private balance | `strk20Balances` — balance held inside the pool |
 | ZK proving | `strk20PrepareInvoke` → SNIP-36 proof, generated **client-side by the user's wallet** |
-| Gasless + fee privacy | AVNU paymaster, `sponsored_private` — the fee is paid *from inside the pool* |
+| Submission + fee privacy | AVNU paymaster — **the only way a server-side agent can submit a proven transaction**; `sponsored_private` also pays the fee *from inside the pool* |
 | Selective disclosure | viewing keys (`reveal`) |
 | Operator blinding | OHTTP (RFC 9458) on proving + discovery |
 
@@ -94,7 +94,9 @@ Building in public, daily. Honest state:
 - [x] Privacy pool addresses recovered and verified on-chain, both networks
 - [x] **Anonymous browsing proven end-to-end** — Obscura → Tor returns `{"IsTor":true}` from the Tor Project's own API
 - [x] Sepolia account funded (faucet script) and **deployed** — can sign
-- [ ] Register viewing key → **shielded deposit** (tests screening) → private transfer  ← *next, and the gate*
+- [x] **Real ZK proof from StarkWare's hosted prover** — `apply_actions`, proof facts present
+- [ ] Submit a proven transaction (needs the AVNU paymaster) ← *next*
+- [ ] **Shielded deposit** (tests screening) → private transfer  ← *the gate*
 - [ ] MCP server + `balance` / `topup`
 - [ ] Payment loop + STRK20 paywall + gasless settlement
 - [ ] Anonymous browsing worker

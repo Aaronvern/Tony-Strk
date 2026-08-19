@@ -30,10 +30,10 @@ Everything else is normal engineering; *this* is the part that must work. We use
 | 5 | ✅ **Sepolia account** funded + **deployed** (`scripts/faucet.mjs`, `scripts/deploy-account.mjs`) | [BOTH] | 5 STRK, account live, can sign |
 | 6 | ✅ Hosted infra verified: prover `transaction-prover.alpha-sepolia.sw-dev.io`, discovery `discovery-service.alpha-sepolia.sw-dev.io` | [ME] | `npm run spike:services` passes |
 | 7 | ✅ **Pool addresses** recovered + verified on-chain, both networks | [ME] | in `.env.example` |
-| 8 | **Register the viewing key** (`SetViewingKey`) — wait ~10 blocks after account deploy | [ME] | tx accepted |
-| 9 | **Shield: deposit STRK into the pool** (needs a screening signature — it's mandatory) | [ME] | `Deposit` event on-chain |
-| 10 | **Private transfer** between two accounts | [ME] | tx accepted, balance moves, nothing leaks on explorer |
-| 11 | **Read private balance** back via discovery | [ME] | `strk20Balances` returns the right number |
+| 8 | ✅ **Prove an action** against the hosted prover | [ME] | real proof returned, facts present |
+| 9 | ⬜ **Wire the AVNU paymaster** — the only submission path for a server-side agent (`SdkWallet` + `AvnuPaymaster` from the client package) | [ME] | a proven tx lands on-chain |
+| 10 | ⬜ **Shield: deposit STRK** — needs `invoke_and_apply_action`, and exercises mandatory screening | [ME] | `Deposit` event on-chain |
+| 11 | ⬜ **Private transfer**, then read the private balance back via discovery | [ME] | balance moves, nothing leaks on the explorer |
 
 ✅ **Gate:** when step 10 passes, the product is real. If the SDK fights us here, we learn it on Day 2, not Day 15.
 
