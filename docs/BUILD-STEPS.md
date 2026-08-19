@@ -12,10 +12,10 @@ Do this first: the leaderboard ranks by *most recent push*, so existing early an
 
 | # | Step | Who | Done when |
 | --- | --- | --- | --- |
-| 1 | Create the **public GitHub repo** (`tony-stark`) | [YOU] | repo exists, public |
-| 2 | Commit the `docs/` we already wrote + a real README | [ME] | pushed |
-| 3 | **Submit the application PR** — the hackathon entry | [BOTH] | PR open, tracked by StarkWare |
-| 4 | Pin toolchain: **Node 24**, `starknet@10.7.0` (`latest` = 10.0.2 is too old) | [ME] | `.nvmrc` + lockfile committed |
+| 1 | ✅ Create the **public GitHub repo** | [YOU] | `Aaronvern/Tony-Strk` |
+| 2 | ✅ Commit docs + README | [ME] | pushed |
+| 3 | ⬜ **Submit the application PR** — the hackathon entry | [BOTH] | PR open, tracked by StarkWare |
+| 4 | ✅ Pin toolchain: **Node 24**, `starknet@10.7.0` (`latest` = 10.0.2 is too old) | [ME] | `.nvmrc` + lockfile committed |
 
 ⚠️ Step 3 is the actual entry. Nothing else counts until it's in.
 
@@ -27,9 +27,9 @@ Everything else is normal engineering; *this* is the part that must work. We use
 
 | # | Step | Who | Done when |
 | --- | --- | --- | --- |
-| 5 | Create a **Sepolia account** + fund with testnet STRK (faucet) | [YOU] | address has a balance |
-| 6 | Wire the SDK to hosted infra: prover `https://transaction-prover.alpha-sepolia.sw-dev.io`, discovery `https://discovery-service.alpha-sepolia.sw-dev.io` | [ME] | `/health` OK from our code |
-| 7 | Find the **Sepolia pool address** (SDK repo/config; else ask organizers) | [ME] | address in `.env` |
+| 5 | ✅ **Sepolia account** funded + **deployed** (`scripts/faucet.mjs`, `scripts/deploy-account.mjs`) | [BOTH] | 5 STRK, account live, can sign |
+| 6 | ✅ Hosted infra verified: prover `transaction-prover.alpha-sepolia.sw-dev.io`, discovery `discovery-service.alpha-sepolia.sw-dev.io` | [ME] | `npm run spike:services` passes |
+| 7 | ✅ **Pool addresses** recovered + verified on-chain, both networks | [ME] | in `.env.example` |
 | 8 | **Register the viewing key** (`SetViewingKey`) — wait ~10 blocks after account deploy | [ME] | tx accepted |
 | 9 | **Shield: deposit STRK into the pool** (needs a screening signature — it's mandatory) | [ME] | `Deposit` event on-chain |
 | 10 | **Private transfer** between two accounts | [ME] | tx accepted, balance moves, nothing leaks on explorer |

@@ -93,7 +93,8 @@ Building in public, daily. Honest state:
 - [x] Live hosted prover + discovery verified (OHTTP key matches the SDK repo's pinned config)
 - [x] Privacy pool addresses recovered and verified on-chain, both networks
 - [x] **Anonymous browsing proven end-to-end** — Obscura → Tor returns `{"IsTor":true}` from the Tor Project's own API
-- [ ] Shielded deposit + private transfer on Sepolia
+- [x] Sepolia account funded (faucet script) and **deployed** — can sign
+- [ ] Register viewing key → **shielded deposit** (tests screening) → private transfer  ← *next, and the gate*
 - [ ] MCP server + `balance` / `topup`
 - [ ] Payment loop + STRK20 paywall + gasless settlement
 - [ ] Anonymous browsing worker
@@ -109,9 +110,37 @@ Nothing here is presented as working before it is. Devnet is never shown as main
 ```bash
 nvm use            # Node 24 (required by ohttp-ts)
 npm install
+
+npm run spike:services    # verify every external dependency is live
+npm run spike:wallet      # drive the STRK20 wallet API headlessly
 ```
 
 Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to 10.0.2, which predates the STRK20 API.
+
+### Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/spikes/check-services.mjs` | verifies prover, discovery, OHTTP, pool contracts on-chain, and that discovery serves our pool (with a control) |
+| `scripts/spikes/mock-wallet-spike.mjs` | proves the STRK20 wallet API works headlessly — no browser |
+| `scripts/faucet.mjs` | funds a Sepolia address (proof-of-work gated, no auth) |
+| `scripts/deploy-account.mjs` | deploys a counterfactual Ready/Argent account |
+
+Secrets come from the environment (`ACCOUNT_PRIVATE_KEY`), never from a file. `.env` is gitignored — **use testnet keys only**.
+
+## Verify it yourself
+
+Don't take the claims on trust:
+
+```bash
+# every dependency is live, and discovery really serves our pool
+npm run spike:services
+
+# the destination confirms it cannot see you
+obscura --stealth --proxy socks5://127.0.0.1:9050 \
+        fetch https://check.torproject.org/api/ip --dump text
+# → {"IsTor":true,"IP":"<a Tor exit>"}
+```
 
 ---
 
