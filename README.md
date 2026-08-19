@@ -1,6 +1,8 @@
-# Tony Stark 🥷
+# Tony Strk
 
-**An AI agent that browses and pays for the web — without anyone being able to trace it back to you.**
+**A private browsing interface for AI agents.**
+
+The current Web2 demo maps an MCP request through an ephemeral worker and Tor egress. It intentionally does **not** implement STRK20 or x402 payments yet.
 
 > The web sees the suit. Nobody sees the man inside.
 
@@ -89,6 +91,7 @@ Not a mixer. STRK20 screens every deposit against sanctions lists before a proof
 Building in public, daily. Honest state:
 
 - [x] Feasibility spikes — toolchain, SDK, hosted infra all verified ([`docs/SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md))
+- [x] Responsive Web2 demo with an honest, local-only route preview
 - [x] **Headless STRK20 wallet API proven** — all four privacy methods driven from pure Node, no browser
 - [x] Live hosted prover + discovery verified (OHTTP key matches the SDK repo's pinned config)
 - [x] Privacy pool addresses recovered and verified on-chain, both networks
@@ -113,6 +116,10 @@ Nothing here is presented as working before it is. Devnet is never shown as main
 ```bash
 nvm use            # Node 24 (required by ohttp-ts)
 npm install
+
+npm run dev        # open the Web2 demo
+npm test           # verify route parsing
+npm run build      # production bundle
 
 npm run spike:services    # verify every external dependency is live
 npm run spike:wallet      # drive the STRK20 wallet API headlessly
