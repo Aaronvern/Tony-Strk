@@ -55,9 +55,18 @@ Four actions we compose:
 
 **The key asymmetry:** deposits and withdrawals are visible; everything between them is not. Privacy here is *unlinkability inside a crowd*, not invisibility. "Address A deposited" is public. "User A paid service B" is not.
 
-### Who does the proving
+### Who proves, and who submits — these are different
 
-Generating the ZK proof is expensive, and we don't do it — **the user's wallet does**, through a standard wallet RPC (`wallet_strk20PrepareInvoke` → returns a SNIP-36 proof). We assemble unsigned intents; the wallet proves and signs. That's what keeps us non-custodial: we can't spend your funds and can't decrypt your notes.
+Generating the ZK proof is expensive and we don't do it. Either the user's wallet proves (`wallet_strk20PrepareInvoke` → a SNIP-36 proof) or we ask StarkWare's hosted prover. Either way we assemble intents and never hold keys — that's what keeps us non-custodial.
+
+**Then it has to be submitted, and that's a separate problem.** The SDK's `execute()` returns `{callAndProof, registry}` — proved, not submitted. Getting it on-chain means calling `apply_actions` **with the proof attached to the transaction**, and a plain starknet.js `Account` has no way to attach it. Only two things can:
+
+| Path | How |
+|---|---|
+| **AVNU paymaster** | `apply_action`; or **`invoke_and_apply_action` when a deposit is involved** — the ERC-20 `approve` must run as the *user*, and under `apply_action` the executing account is the paymaster |
+| STRK20-aware wallet | `WalletAccountV6.executeWithProof` |
+
+**So the paymaster is load-bearing, not a gasless nicety** — for a server-side agent it's how you transact at all. It still gives us fee privacy; that's now a bonus rather than the reason we chose it.
 
 ### Two constraints that shape everything
 
@@ -103,12 +112,14 @@ Every deposit is screened against sanctions lists before a proof is issued — m
 | Privacy pool contracts | ✅ verified on-chain, both networks |
 | Anonymous browsing | ✅ Obscura → Tor returns `IsTor:true` |
 | Sepolia account | ✅ funded + deployed, can sign |
-| **Shielded deposit + private transfer** | ⬜ **next — the gate** |
+| **Real ZK proof from the hosted prover** | ✅ **proving works** — `apply_actions`, facts present |
+| Submitting a proven tx | ⬜ needs the AVNU paymaster ← **next** |
+| Shielded deposit (screening) + private transfer | ⬜ blocked on submission |
 | MCP server, hero loop, mainnet | ⬜ to build |
 
 Until that shielded transfer lands, treat everything as provisional.
 
-**Known risks:** deposit screening is untestable from outside (it runs inside the prover — first thing we prove); anonymity-set size means our privacy is only as strong as the shared pool's participation; ~11 days left, and if we slip, the *browsing* layer gets cut, not the payment path.
+**Known risks:** deposit screening is untestable from outside (it runs inside the prover during a deposit, so it's one step behind submission); anonymity-set size means our privacy is only as strong as the shared pool's participation; ~11 days left, and if we slip, the *browsing* layer gets cut, not the payment path.
 
 ---
 
@@ -146,7 +157,9 @@ obscura --stealth --proxy socks5://127.0.0.1:9050 \
 3. **Node 24 or nothing** — `ohttp-ts` needs its WebCrypto.
 4. **Starknet accounts must be deployed** before they can sign; an address exists counterfactually and fails confusingly until then.
 5. **The privacy SDK isn't on npm** — install from GitHub Packages or a git SHA.
-6. **Never claim more privacy than we've verified.** If it's not in the "verified" table above, it's not a claim.
+6. **The viewing key must be ≤ `CURVE.n / 2`** — half the curve order. A raw Poseidon digest overflows it about half the time and the pool rejects it with `PRIVATE_KEY_NOT_CANONICAL`.
+7. **Errors surface from the prover, not the chain.** A failed action reverts inside the prover's *virtual* block, so the tx hash in the error doesn't exist on Starknet — don't look it up on an explorer. Decode the felt in the revert reason instead.
+8. **Never claim more privacy than we've verified.** If it's not in the "verified" table above, it's not a claim.
 
 ---
 
