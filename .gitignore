@@ -19,4 +19,7 @@ playwright-report/
 test-results/
 tor-data/
 .DS_Store
+
+# built-from-source SDK (see scripts/setup-sdk.sh)
+vendor/
 .vercel

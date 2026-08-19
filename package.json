@@ -14,9 +14,12 @@
     "test": "node --test",
     "typecheck": "tsc --noEmit",
     "spike:wallet": "node scripts/spikes/mock-wallet-spike.mjs",
-    "spike:services": "node scripts/spikes/check-services.mjs"
+    "spike:services": "node scripts/spikes/check-services.mjs",
+    "setup": "bash scripts/setup-sdk.sh"
   },
   "dependencies": {
+    "@starkware-libs/starknet-privacy-client": "file:vendor/starknet-privacy/client",
+    "@starkware-libs/starknet-privacy-sdk": "file:vendor/starknet-privacy/sdk",
     "starknet": "^10.7.0"
   },
   "devDependencies": {

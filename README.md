@@ -13,7 +13,7 @@ A **remote MCP server** that gives any AI agent (Claude, Cursor, …) two powers
 1. **Browse anonymously** — a cloud headless browser that exits through Tor, so sites never see your IP, device, or identity.
 2. **Pay anonymously** — a private wallet settling in **shielded STRK20** on Starknet, so neither the chain, the payee, nor the operator can link a payment to you.
 
-Built for the [**STRK20 Private Sprint**](https://strk20.starknet.io/hackathon) — StarkWare's privacy hackathon. This is their own suggested build **#11: Private AI Agent Payments** ("agents pay for APIs, compute and services without turning every payment into a public workflow map").
+Built for the [**STRK20 Private Sprint**](https://strk20.starknet.io/hackathon) — StarkWare's privacy hackathon. This is their own suggested build [**#11: Private AI Agent Payments**](https://www.starknet.io/blog/11-things-you-can-build-with-strk20-on-starknet/) — *"Agent wallets and autonomous payment flows are already starting to appear. The privacy side is the part that still needs to be built."*
 
 ---
 
@@ -118,6 +118,7 @@ Nothing here is presented as working before it is. Devnet is never shown as main
 ```bash
 nvm use            # Node 24 (required by ohttp-ts)
 npm install
+npm run setup      # builds the privacy SDK from source (not on npm)
 
 npm run dev        # open the Web2 demo
 npm test           # verify route parsing
@@ -169,6 +170,10 @@ obscura --stealth --proxy socks5://127.0.0.1:9050 \
 | [`SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md) | what we verified first-hand, with evidence |
 | [`BUILD-STEPS.md`](docs/BUILD-STEPS.md) | step-by-step build guide |
 | [`READING-LIST.md`](docs/READING-LIST.md) | annotated background reading |
+
+## Team
+
+Built by [Prathamesh Bhatkhande](https://github.com/prathadox) and [Aaronvern](https://github.com/Aaronvern) for the STRK20 Private Sprint.
 
 ## Built on
 

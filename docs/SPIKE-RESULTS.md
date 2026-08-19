@@ -1,3 +1,10 @@
+# Spike Results
+
+> **Read this first:** this file is a chronological log, newest section last.
+> Earlier spikes record blockers (⛔) that later spikes **resolved** — §22's
+> missing API key and §20's submission gap are both closed by §23. For current
+> state see [`START-HERE.md`](START-HERE.md); the money path works.
+
 # Day-1 Spike Results — 2026-08-14
 
 Goal: prove the tooling is real *before* betting 18 days on it, and close the biggest open risk — **can a headless server do STRK20 private payments on mainnet without self-hosting a prover?**
