@@ -3,7 +3,7 @@ import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
 import { createServer } from "./mcp/server.ts";
-import type { BrowseDeps } from "./tools/browse.ts";
+import type { ServerDeps } from "./mcp/server.ts";
 
 /**
  * Build the HTTP surface for the MCP server.
@@ -13,7 +13,7 @@ import type { BrowseDeps } from "./tools/browse.ts";
  * the user happens to have open.
  */
 export function createApp(
-  deps: BrowseDeps,
+  deps: ServerDeps,
   opts: { host?: string; allowedHosts?: string[] } = {},
 ) {
   const app = createMcpExpressApp(opts);
