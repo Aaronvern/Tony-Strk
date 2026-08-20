@@ -1,8 +1,8 @@
 const steps = [
-  ["01", "MCP request", "The client asks Tony Strk to fetch a public URL."],
-  ["02", "Ephemeral worker", "A disposable session receives the request."],
-  ["03", "Tor egress", "The destination sees an exit relay, not the client IP."],
-  ["04", "Public web", "The response returns through the same isolated route."],
+  ["01", "Route input", "The browser validates a public HTTP(S) destination locally."],
+  ["02", "MCP server (planned)", "The finished product will accept a structured agent action through MCP."],
+  ["03", "Isolated worker (planned)", "A future worker will execute the approved action in a short-lived session."],
+  ["04", "No execution today", "This Web2 prototype maps the route only and does not contact the destination."],
 ];
 
 export function buildRoute(value) {

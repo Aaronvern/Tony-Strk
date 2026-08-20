@@ -8,10 +8,10 @@ test("buildRoute describes the Web2 privacy path without claiming STRK20", () =>
 
   assert.equal(route.target, "example.com");
   assert.deepEqual(route.steps.map(({ label }) => label), [
-    "MCP request",
-    "Ephemeral worker",
-    "Tor egress",
-    "Public web",
+    "Route input",
+    "MCP server (planned)",
+    "Isolated worker (planned)",
+    "No execution today",
   ]);
   assert.equal(route.payment, "Not enabled in this demo");
 });
