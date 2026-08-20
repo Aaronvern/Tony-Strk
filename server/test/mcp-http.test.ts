@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-import { createApp } from "../server/src/app.ts";
+import { createApp } from "../src/app.ts";
 
 // The in-memory tests prove the server logic. This one proves the thing a
 // client actually dials - an HTTP port - is really speaking the protocol.

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { browse } from "../server/src/tools/browse.ts";
+import { browse } from "../src/tools/browse.ts";
 
 test("browse refuses to fetch when no Tor proxy is configured", async () => {
   let attempted = false;

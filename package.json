@@ -2,36 +2,31 @@
   "name": "tony-strk",
   "version": "0.1.0",
   "private": true,
-  "description": "A private browsing interface for AI agents, with STRK20 settlement planned next",
+  "description": "Anonymous browsing and private payments for AI agents.",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=24"
   },
+  "workspaces": [
+    "web",
+    "server"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "dev:server": "node --watch server/src/index.ts",
-    "start:server": "node server/src/index.ts",
-    "test": "node --test \"tests/**/*.test.mjs\" \"tests/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit",
+    "dev": "npm run dev --workspace @tony-strk/web",
+    "build": "npm run build --workspace @tony-strk/web",
+    "dev:server": "npm run dev --workspace @tony-strk/server",
+    "start:server": "npm run start --workspace @tony-strk/server",
+    "test": "npm run test --workspaces --if-present",
+    "verify:mcp": "npm run verify:mcp --workspace @tony-strk/server",
     "spike:wallet": "node scripts/spikes/mock-wallet-spike.mjs",
     "spike:services": "node scripts/spikes/check-services.mjs",
-    "verify:mcp": "node scripts/verify-mcp.mjs",
     "setup": "bash scripts/setup-sdk.sh"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "@starkware-libs/starknet-privacy-client": "file:vendor/starknet-privacy/client",
     "@starkware-libs/starknet-privacy-sdk": "file:vendor/starknet-privacy/sdk",
-    "@types/express": "^5.0.6",
-    "express": "^5.2.1",
-    "next": "^16.1.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "starknet": "^10.7.0",
-    "zod": "^3.25.76"
+    "starknet": "^10.7.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
