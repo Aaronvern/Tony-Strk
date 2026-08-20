@@ -1,8 +1,8 @@
 const steps = [
   ["01", "Route input", "The browser validates a public HTTP(S) destination locally."],
-  ["02", "MCP server (planned)", "The finished product will accept a structured agent action through MCP."],
-  ["03", "Isolated worker (planned)", "A future worker will execute the approved action in a short-lived session."],
-  ["04", "No execution today", "This Web2 prototype maps the route only and does not contact the destination."],
+  ["02", "MCP browse (separate)", "The local MCP tool is separately runnable; the landing page does not invoke it."],
+  ["03", "Isolated worker (when run)", "With Obscura and Tor configured, the MCP tool creates one short-lived browser context."],
+  ["04", "Optional OHTTP", "Configured OHTTP uses relay and gateway services with no direct-worker fallback."],
 ];
 
 export function buildRoute(value) {

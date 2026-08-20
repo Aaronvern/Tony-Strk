@@ -25,24 +25,24 @@ export default function Home() {
 
       <section className="statement" id="scope">
         <div><p className="eyebrow">Prototype scope</p><h2>WHAT IT<br /><em>DOES.</em></h2></div>
-        <p>This is a browser-only planning interface for a future private agent route. The interaction validates a public HTTP(S) destination and shows the proposed route. It does not fetch the destination, start a worker, open a wallet, contact STRK20, or process x402.</p>
+        <p>This landing-page mapper validates a public HTTP(S) destination and shows a proposed route in your browser. It does not invoke the MCP server, fetch the destination, start a worker, open a wallet, contact STRK20, or process x402.</p>
       </section>
 
       <section className="scope-grid" aria-label="Prototype capabilities">
-        <article><p>Included now / 01</p><h3>LOCAL<br />ROUTE MAP.</h3><span>Accepts a public HTTP(S) URL and maps four conceptual steps in your browser.</span></article>
-        <article><p>Explicitly off / 02</p><h3>NO LIVE<br /><em>EXECUTION.</em></h3><span>No destination fetch, disposable worker, egress connection, wallet request, payment, or transaction occurs.</span></article>
-        <article><p>Next layer / 03</p><h3>PRIVATE<br />ROUTING.</h3><span>Privacy tooling is a future integration target, not a claim made by this prototype.</span></article>
+        <article><p>Landing page / 01</p><h3>LOCAL<br />ROUTE MAP.</h3><span>Accepts a public HTTP(S) URL and maps four conceptual steps in your browser.</span></article>
+        <article><p>Local tool / 02</p><h3>MCP<br /><em>BROWSE.</em></h3><span>A separately runnable local MCP server accepts one public URL and uses an isolated worker only.</span></article>
+        <article><p>Future layer / 03</p><h3>PRIVATE<br />SETTLEMENT.</h3><span>STRK20, x402, and wallet actions remain future work—not simulated here.</span></article>
       </section>
 
       <section className="future-system">
-        <div className="section-heading"><p className="eyebrow">Finished product / design target</p><h2>ONE AGENT.<br /><em>PRIVATE ACTION.</em></h2></div>
-        <p className="future-intro">The finished Tony Strk product is an MCP-facing execution layer for AI agents. The current site is only the route-mapping UI below. Design target — not live.</p>
+        <div className="section-heading"><p className="eyebrow">MCP server — local tool</p><h2>ONE AGENT.<br /><em>ONE BOUNDARY.</em></h2></div>
+        <p className="future-intro">The landing page stays a local mapper. The separate stdio MCP server has one <code>browse</code> tool: it validates a public URL, creates one isolated browser context, and returns only that page’s text.</p>
         <div className="future-flow">
-          <article><span>01</span><h3>MCP<br />SERVER.</h3><p>An agent sends a structured action to Tony Strk through an MCP server.</p></article>
-          <article><span>02</span><h3>ISOLATED<br />EXECUTION.</h3><p>A future worker runs the approved web action in a short-lived, isolated session.</p></article>
-          <article><span>03</span><h3>PRIVATE<br /><em>SETTLEMENT.</em></h3><p>Where payment is needed, a privacy-enabled wallet will build and prove the STRK20 action. The product never asks for a viewing key.</p></article>
+          <article><span>01</span><h3>MCP<br />SERVER.</h3><p>An agent sends one structured <code>browse</code> action through local stdio.</p></article>
+          <article><span>02</span><h3>ISOLATED<br />EXECUTION.</h3><p>With local Obscura and Tor configured, each action uses a fresh browser context and closes it afterward.</p></article>
+          <article><span>03</span><h3>PRIVATE<br /><em>SETTLEMENT.</em></h3><p>Wallet actions, STRK20, and x402 remain an intentionally unbuilt future layer.</p></article>
         </div>
-        <p className="future-note">STRK20 hides movement inside the pool. Deposits, withdrawals, and timing remain public by design.</p>
+        <p className="future-note">Optional OHTTP mode has no direct-worker fallback. It needs an independently operated relay and gateway; a local protocol test is not anonymity.</p>
       </section>
 
       <section className="technical-dissect" id="system">
@@ -51,8 +51,8 @@ export default function Home() {
           <Image src="/tony-strk-armour-assembly-blueprint.png" alt="Cobalt technical blueprint showing a powered armour torso and its components" fill sizes="(max-width: 900px) 100vw, 90vw" />
           <figcaption>Torso dissection / 02</figcaption>
           <div className="callout callout-core"><span>01</span><strong>Local input</strong><p>The URL stays in this browser while the route is mapped.</p></div>
-          <div className="callout callout-frame"><span>02</span><strong>Future shell</strong><p>Privacy integrations are designed as a later layer, not simulated as live.</p></div>
-          <div className="callout callout-lock"><span>03</span><strong>Hard stop</strong><p>The prototype does not execute the route or contact the destination.</p></div>
+          <div className="callout callout-frame"><span>02</span><strong>Separate tool</strong><p>The MCP runtime is local and never invoked by this landing-page mapper.</p></div>
+          <div className="callout callout-lock"><span>03</span><strong>Hard stop</strong><p>Wallets, payments, STRK20, and x402 are not part of the current runtime.</p></div>
         </figure>
       </section>
 
@@ -71,11 +71,11 @@ export default function Home() {
 
       <section className="build" id="build">
         <p className="eyebrow">Current status</p>
-        <h2>LOCAL MAP.<br />LIVE LAYERS <em>OFF.</em></h2>
-        <div><p>The landing page and local route mapper are working. Wallet connectivity, STRK20 transactions, x402, private egress, and live workers are intentionally absent.</p><a href="https://github.com/Aaronvern/Tony-Strk">View the build <span>↗</span></a></div>
+        <h2>LANDING MAP.<br />MCP TOOL <em>LOCAL.</em></h2>
+        <div><p>The landing page never sends a request. The separately runnable MCP tool needs local Obscura and Tor; remote relay and gateway services are opt-in. Wallet connectivity, STRK20 transactions, and x402 remain absent.</p><a href="https://github.com/Aaronvern/Tony-Strk">View the build <span>↗</span></a></div>
       </section>
 
-      <footer><a className="wordmark" href="#top">tony <b>strk</b></a><p>Web2 prototype. No requests or payments are sent.</p><p>© 2026</p></footer>
+      <footer><a className="wordmark" href="#top">tony <b>strk</b></a><p>Landing mapper: no requests or payments are sent.</p><p>© 2026</p></footer>
     </main>
   );
 }

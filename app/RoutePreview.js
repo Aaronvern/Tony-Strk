@@ -32,7 +32,7 @@ export default function RoutePreview() {
         <p aria-live="polite" className="route-status">{message}</p>
       </form>
       <div className="route-steps">
-        {['MCP call', 'Disposable worker', 'Private egress', 'Public web'].map((label, index) => (
+        {['Local map', 'Separate MCP', 'Isolated worker', 'Optional OHTTP'].map((label, index) => (
           <article key={label}><span>0{index + 1}</span><strong>{label}</strong><i>{index < 3 ? '→' : '✓'}</i></article>
         ))}
       </div>
