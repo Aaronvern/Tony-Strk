@@ -10,7 +10,7 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
-const url = process.env.MCP_URL ?? "http://127.0.0.1:3000/api/mcp";
+const url = process.env.MCP_URL ?? "http://127.0.0.1:8787/mcp";
 
 const client = new Client({ name: "tony-strk-verify", version: "0.1.0" });
 await client.connect(new StreamableHTTPClientTransport(new URL(url)));

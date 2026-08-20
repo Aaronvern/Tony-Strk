@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
-import { browse } from "./tools/browse.mjs";
+import { browse, type BrowseDeps } from "../tools/browse.ts";
 
 /**
  * Build the Tony Strk MCP server.
@@ -9,7 +9,7 @@ import { browse } from "./tools/browse.mjs";
  * Dependencies are injected rather than read from the environment here, so the
  * server can be exercised by tests without a live Tor circuit.
  */
-export function createServer(deps) {
+export function createServer(deps: BrowseDeps): McpServer {
   const server = new McpServer({ name: "tony-strk", version: "0.1.0" });
 
   server.registerTool(
@@ -25,7 +25,7 @@ export function createServer(deps) {
     },
     async ({ url }) => {
       const result = await browse({ url }, deps);
-      return { content: [{ type: "text", text: result.text }] };
+      return { content: [{ type: "text" as const, text: result.text }] };
     },
   );
 

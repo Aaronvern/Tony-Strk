@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
-import { createServer } from "../src/mcp/server.mjs";
+import { createServer } from "../server/src/mcp/server.ts";
 
 // Talks to the server the way a real client does, over the SDK's own
 // transport, so these exercise the actual protocol rather than a stand-in.
