@@ -2,6 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { browse, type BrowseDeps } from "../tools/browse.ts";
+import { pay, type PayDeps } from "../pay/pay.ts";
+
+export type ServerDeps = BrowseDeps & { pay?: PayDeps };
 
 /**
  * Build the Tony Strk MCP server.
@@ -9,7 +12,7 @@ import { browse, type BrowseDeps } from "../tools/browse.ts";
  * Dependencies are injected rather than read from the environment here, so the
  * server can be exercised by tests without a live Tor circuit.
  */
-export function createServer(deps: BrowseDeps): McpServer {
+export function createServer(deps: ServerDeps): McpServer {
   const server = new McpServer({ name: "tony-strk", version: "0.1.0" });
 
   server.registerTool(
@@ -46,6 +49,45 @@ export function createServer(deps: BrowseDeps): McpServer {
       const result = await browse({ url, raw }, deps);
       return {
         content: [{ type: "text" as const, text: result.text }],
+        structuredContent: result,
+      };
+    },
+  );
+
+  server.registerTool(
+    "pay",
+    {
+      title: "Pay privately",
+      description:
+        "Pay a Starknet address out of the shielded STRK20 pool. The payee " +
+        "sees an amount arrive but cannot tell which depositor sent it. The " +
+        "amount itself is visible on-chain. Requires a self-hosted instance " +
+        "holding a spending key.",
+      inputSchema: {
+        to: z.string().describe("Recipient Starknet address, 0x-prefixed."),
+        amount: z
+          .string()
+          .describe('Amount in STRK as a decimal string, e.g. "1.5".'),
+      },
+      outputSchema: {
+        transactionHash: z.string(),
+        recipient: z.string(),
+        amountWei: z.string().describe("The amount actually sent, in wei."),
+        explorerUrl: z.string(),
+      },
+    },
+    async ({ to, amount }) => {
+      const result = await pay(
+        { to, amount },
+        deps.pay ?? { wallet: null, token: "", explorerBase: "" },
+      );
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Paid ${amount} STRK to ${result.recipient}. ${result.explorerUrl}`,
+          },
+        ],
         structuredContent: result,
       };
     },

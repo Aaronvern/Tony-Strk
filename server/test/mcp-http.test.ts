@@ -29,6 +29,6 @@ test("the Express server speaks MCP over Streamable HTTP", async (t) => {
 
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    ["browse"],
+    ["browse", "pay"],
   );
 });

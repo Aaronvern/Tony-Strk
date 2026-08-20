@@ -22,14 +22,14 @@ async function connect(deps = {}) {
   return client;
 }
 
-test("an MCP client can discover the browse tool", async () => {
+test("an MCP client can discover the tools", async () => {
   const client = await connect();
 
   const { tools } = await client.listTools();
 
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    ["browse"],
+    ["browse", "pay"],
   );
 });
 
