@@ -1,0 +1,33 @@
+[package]
+name = "paywall_anonymizer"
+version = "0.1.0"
+edition = "2024_07"
+license-file = "../LICENSE"
+
+[dependencies]
+starknet = "2.17.0"
+openzeppelin = "3.0.0"
+privacy = { git = "https://github.com/starkware-libs/starknet-privacy" }
+
+[dev-dependencies]
+assert_macros = "2.17.0"
+snforge_std = "0.63.0"
+starkware_utils_testing = { git = "https://github.com/starkware-libs/starkware-starknet-utils", rev = "3e2fd53d99e16c87f6cf2ced53b8c842a2d54a18" }
+
+[tool.scarb]
+allow-prebuilt-plugins = ["snforge_std"]
+
+[lib]
+
+[[test]]
+name = "paywall_anonymizer_unittest"
+build-external-contracts = [
+    "starkware_utils::erc20::erc20_mocks::DualCaseERC20Mock",
+]
+
+[scripts]
+test = "snforge test"
+
+[[target.starknet-contract]]
+sierra = true
+casm = true

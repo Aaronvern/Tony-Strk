@@ -18,6 +18,8 @@
     "dev:server": "npm run dev --workspace @tony-strk/server",
     "start:server": "npm run start --workspace @tony-strk/server",
     "test": "npm run test --workspaces --if-present",
+    "test:contracts": "cd contracts && snforge test",
+    "build:contracts": "cd contracts && scarb build",
     "verify:mcp": "npm run verify:mcp --workspace @tony-strk/server",
     "spike:wallet": "node scripts/spikes/mock-wallet-spike.mjs",
     "spike:services": "node scripts/spikes/check-services.mjs",
