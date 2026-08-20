@@ -1,17 +1,19 @@
 # Tony Strk
 
-**A private browsing interface for AI agents.**
+**Anonymous browsing and private payments for AI agents.**
 
-The current Web2 demo maps an MCP request through an ephemeral worker and Tor egress. It intentionally does **not** implement STRK20 or x402 payments yet.
+When you send an agent out to do something on the web, it goes as you. Your IP, your card, your wallet. Every site it visits and everything it buys gets attributed back to you, in logs you don't control.
+
+Tony Strk is a **remote MCP server** that gives the agent its own way to get around. It works with any MCP client (Claude, Cursor, …).
 
 **Live demo:** https://tony-strk.vercel.app
 
 > The web sees the suit. Nobody sees the man inside.
 
-A **remote MCP server** that gives any AI agent (Claude, Cursor, …) two powers:
+1. **Browse** — a cloud headless browser on a fresh Tor circuit per task. Sites see an exit relay, not your IP or your device.
+2. **Pay** — a private wallet holding **shielded STRK20** on Starknet. The chain, the payee and the operator can't link a payment back to you.
 
-1. **Browse anonymously** — a cloud headless browser that exits through Tor, so sites never see your IP, device, or identity.
-2. **Pay anonymously** — a private wallet settling in **shielded STRK20** on Starknet, so neither the chain, the payee, nor the operator can link a payment to you.
+You need both. An agent that browses anonymously and then pays from a wallet with a public history has just leaked everything it spent the last ten minutes protecting.
 
 Built for the [**STRK20 Private Sprint**](https://strk20.starknet.io/hackathon) — StarkWare's privacy hackathon. This is their own suggested build [**#11: Private AI Agent Payments**](https://www.starknet.io/blog/11-things-you-can-build-with-strk20-on-starknet/) — *"Agent wallets and autonomous payment flows are already starting to appear. The privacy side is the part that still needs to be built."*
 
@@ -43,7 +45,7 @@ Tony Stark makes agent activity private by default — and auditable *only* by y
   + Tor            pool (ZK-STARK)
        │              │
        ▼              ▼
-   the website    Starknet mainnet
+   the website    STRK20 pool
 ```
 
 **One task, end to end:** the agent asks to browse → a fresh worker spawns on a new Tor circuit → the site sees a Tor exit, not you → the page demands payment → the payment worker builds a shielded intent → **your wallet** proves and signs it client-side → it settles gaslessly through the AVNU paymaster → content returns → metering is debited off-chain and settled in batches, so timing can't be correlated.
@@ -91,6 +93,8 @@ Not a mixer. STRK20 screens every deposit against sanctions lists before a proof
 ## Status
 
 Building in public, daily. Honest state:
+
+**The live demo does not move money yet.** It maps an MCP request through an ephemeral worker and Tor egress, and says so on the page. The payment path below is proven by script on Sepolia, not yet wired to the demo.
 
 - [x] Feasibility spikes — toolchain, SDK, hosted infra all verified ([`docs/SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md))
 - [x] Responsive Web2 demo with an honest, local-only route preview
