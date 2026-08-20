@@ -80,3 +80,41 @@ test("browse flags a 402 as a paywall rather than returning the page", async () 
   assert.equal(result.paymentRequired, true);
   assert.equal(result.status, 402);
 });
+
+test("browse returns readable text, not markup", async () => {
+  const page = `<!doctype html><html><head><title>  The Article  </title>
+    <style>body{color:red}</style><script>console.log("tracker")</script></head>
+    <body><h1>Headline</h1><p>First paragraph &amp; more.</p>
+    <script>analytics()</script><p>Second paragraph.</p></body></html>`;
+
+  const result = await browse(
+    { url: "https://example.com/a" },
+    {
+      torProxy: "socks5://127.0.0.1:9050",
+      fetchImpl: () =>
+        new Response(page, { headers: { "content-type": "text/html" } }),
+    },
+  );
+
+  assert.equal(result.title, "The Article");
+  assert.match(result.text, /Headline/);
+  assert.match(result.text, /First paragraph & more\./);
+  assert.match(result.text, /Second paragraph\./);
+  // Script and style bodies are noise that costs the agent tokens.
+  assert.doesNotMatch(result.text, /tracker|analytics|color:red/);
+  assert.doesNotMatch(result.text, /</, "markup should be stripped");
+});
+
+test("browse can return the raw markup when asked", async () => {
+  const page = "<html><body><p>Hi</p></body></html>";
+
+  const result = await browse(
+    { url: "https://example.com/a", raw: true },
+    {
+      torProxy: "socks5://127.0.0.1:9050",
+      fetchImpl: () => new Response(page),
+    },
+  );
+
+  assert.equal(result.text, page);
+});

@@ -32,3 +32,23 @@ test("an MCP client can discover the browse tool", async () => {
     ["browse"],
   );
 });
+
+test("a paywalled page tells the client that payment is required", async () => {
+  const client = await connect({
+    torProxy: "socks5://127.0.0.1:9050",
+    fetchImpl: () =>
+      new Response("<html><body>Pay 5 STRK to read this</body></html>", {
+        status: 402,
+      }),
+  });
+
+  const result = await client.callTool({
+    name: "browse",
+    arguments: { url: "https://paywalled.example/article" },
+  });
+
+  // Without this the agent gets the paywall's HTML and no way to tell it
+  // apart from the article it asked for.
+  assert.equal(result.structuredContent?.paymentRequired, true);
+  assert.equal(result.structuredContent?.status, 402);
+});

@@ -1,5 +1,9 @@
+import { extractText } from "./extract.ts";
+
 export interface BrowseInput {
   url: string;
+  /** Return the response body untouched instead of readable text. */
+  raw?: boolean;
 }
 
 export interface BrowseDeps {
@@ -16,6 +20,7 @@ export interface BrowseResult {
   url: string;
   status: number;
   paymentRequired: boolean;
+  title: string;
   text: string;
 }
 
@@ -45,12 +50,18 @@ export async function browse(
   }
 
   const response = await deps.fetchImpl(url.toString(), { proxy: torProxy });
-  const text = await response.text();
+  const body = await response.text();
+
+  // Only HTML gets reduced. Running the extractor over JSON or plain text
+  // would mangle a response the caller can already read.
+  const isHtml = (response.headers?.get("content-type") ?? "").includes("html");
+  const extracted = !input.raw && isHtml ? extractText(body) : null;
 
   return {
     url: url.toString(),
     status: response.status,
     paymentRequired: response.status === 402,
-    text,
+    title: extracted?.title ?? "",
+    text: extracted?.text ?? body,
   };
 }
