@@ -1,19 +1,19 @@
 # Tony Strk
 
-**The private wallet for AI agents.**
+**Anonymous browsing and private payments for AI agents.**
 
-Agents pay for things on the open web without revealing who they're working for. Shielded **STRK20** for the money, Tor for the traffic — neither half leaks the other.
+When you send an agent out to do something on the web, it goes as you. Your IP, your card, your wallet. Every site it visits and everything it buys gets attributed back to you, in logs you don't control.
+
+Tony Strk is a **remote MCP server** that gives the agent its own way to get around. It works with any MCP client (Claude, Cursor, …).
 
 **Live demo:** https://tony-strk.vercel.app
 
 > The web sees the suit. Nobody sees the man inside.
 
-Anonymous browsing is worthless the moment the agent has to pay for something. You can route every request through Tor, leave no cookies and no fingerprint — and undo all of it with one transaction from a wallet that has a public history. **The payment is the deanonymizer.**
+1. **Browse** — a cloud headless browser on a fresh Tor circuit per task. Sites see an exit relay, not your IP or your device.
+2. **Pay** — a private wallet holding **shielded STRK20** on Starknet. The chain, the payee and the operator can't link a payment back to you.
 
-So Tony Strk is a **remote MCP server** that closes both halves for any AI agent (Claude, Cursor, …):
-
-1. **Pay anonymously** — a private wallet settling in **shielded STRK20** on Starknet, so neither the chain, the payee, nor the operator can link a payment to you.
-2. **Browse anonymously** — a cloud headless browser that exits through Tor, so sites never see your IP, device, or identity.
+You need both. An agent that browses anonymously and then pays from a wallet with a public history has just leaked everything it spent the last ten minutes protecting.
 
 Built for the [**STRK20 Private Sprint**](https://strk20.starknet.io/hackathon) — StarkWare's privacy hackathon. This is their own suggested build [**#11: Private AI Agent Payments**](https://www.starknet.io/blog/11-things-you-can-build-with-strk20-on-starknet/) — *"Agent wallets and autonomous payment flows are already starting to appear. The privacy side is the part that still needs to be built."*
 
