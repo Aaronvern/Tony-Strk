@@ -1,18 +1,10 @@
 import { createApp } from "./app.ts";
+import { createTorFetch } from "./tor/tor-fetch.ts";
 
-/**
- * Node's global fetch has no SOCKS support, and it ignores options it doesn't
- * recognise. Handing it `{ proxy }` would therefore make an ordinary direct
- * request while the caller believed it was on a Tor circuit, which is the one
- * failure this whole tool exists to prevent. Until a real SOCKS dispatcher is
- * wired up, refuse loudly instead.
- */
-function torFetch(_target: string, { proxy }: { proxy: string }): never {
-  throw new Error(
-    `Tor egress is not wired up yet (configured proxy: ${proxy}). ` +
-      "Refusing rather than falling back to a direct request.",
-  );
-}
+// Routes through the SOCKS circuit by replacing the connector underneath
+// undici. Node's global fetch has no SOCKS support and would silently ignore
+// a proxy option, making a direct request instead.
+const torFetch = createTorFetch();
 
 const port = Number(process.env.PORT ?? 8787);
 const host = process.env.HOST ?? "127.0.0.1";
