@@ -19,12 +19,17 @@
     "setup": "bash scripts/setup-sdk.sh"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "2.0.0",
     "@starkware-libs/starknet-privacy-client": "file:vendor/starknet-privacy/client",
     "@starkware-libs/starknet-privacy-sdk": "file:vendor/starknet-privacy/sdk",
+    "hpke": "1.1.4",
     "next": "^16.1.0",
+    "ohttp-ts": "0.4.1",
+    "puppeteer-core": "25.8.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "starknet": "^10.7.0"
+    "starknet": "^10.7.0",
+    "zod": "4.2.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
