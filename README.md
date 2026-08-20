@@ -117,17 +117,29 @@ Nothing here is presented as working before it is. Devnet is never shown as main
 
 ---
 
+## Layout
+
+Two deployables, on purpose:
+
+| | | |
+|---|---|---|
+| `server/` | the MCP server | Express, its own host — because Tor cannot run on a serverless function |
+| `app/` | the landing page | Next.js, static, on Vercel |
+
+TypeScript runs directly on Node 24's type stripping, so there is no build step for the server.
+
 ## Quickstart
 
 ```bash
-nvm use            # Node 24 (required by ohttp-ts)
+nvm use            # Node 24 (required by ohttp-ts, and for running .ts directly)
 npm install
 npm run setup      # builds the privacy SDK from source (not on npm)
 
-npm run dev        # open the Web2 demo
-npm test           # verify route parsing
-npm run build      # production bundle
+npm run start:server   # the MCP server on http://127.0.0.1:8787/mcp
+npm run dev            # the landing page
+npm test               # 9 tests
 
+npm run verify:mcp        # drive the running MCP server with a real MCP client
 npm run spike:services    # verify every external dependency is live
 npm run spike:wallet      # drive the STRK20 wallet API headlessly
 ```
@@ -138,6 +150,7 @@ Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to
 
 | Script | Purpose |
 |---|---|
+| `scripts/verify-mcp.mjs` | connects a real MCP client to the running server, lists tools, and proves `browse` fails closed |
 | `scripts/spikes/check-services.mjs` | verifies prover, discovery, OHTTP, pool contracts on-chain, and that discovery serves our pool (with a control) |
 | `scripts/spikes/mock-wallet-spike.mjs` | proves the STRK20 wallet API works headlessly — no browser |
 | `scripts/faucet.mjs` | funds a Sepolia address (proof-of-work gated, no auth) |

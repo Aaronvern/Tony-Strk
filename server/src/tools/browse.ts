@@ -1,3 +1,24 @@
+export interface BrowseInput {
+  url: string;
+}
+
+export interface BrowseDeps {
+  /** SOCKS address of the Tor circuit, e.g. socks5://127.0.0.1:9050. */
+  torProxy: string;
+  /** Injected so tests can drive the tool without a live circuit. */
+  fetchImpl: (
+    target: string,
+    options: { proxy: string },
+  ) => Response | Promise<Response>;
+}
+
+export interface BrowseResult {
+  url: string;
+  status: number;
+  paymentRequired: boolean;
+  text: string;
+}
+
 /**
  * Fetch a URL on the agent's behalf through an anonymising proxy.
  *
@@ -5,7 +26,10 @@
  * refuse: a direct request would show the destination the caller's real IP,
  * which is exactly what the caller used this tool to avoid.
  */
-export async function browse(input, deps) {
+export async function browse(
+  input: BrowseInput,
+  deps: BrowseDeps,
+): Promise<BrowseResult> {
   const { torProxy } = deps;
 
   const url = new URL(input.url);
