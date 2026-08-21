@@ -44,25 +44,34 @@ const wallet = await createWallet({
   ohttpRelayUrl: process.env.OHTTP_RELAY_URL,
 });
 
+const payDeps =
+  process.env.PAY_ENABLED === "true" && wallet
+    ? {
+        wallet,
+        token: TOKEN,
+        explorerBase:
+          network === "mainnet"
+            ? "https://starkscan.co"
+            : "https://sepolia.starkscan.co",
+      }
+    : undefined;
+
 const app = createApp(
   {
     torProxy: process.env.TOR_SOCKS_PROXY ?? "",
     fetchImpl: torFetch,
-    pay: {
-      wallet,
-      token: TOKEN,
-      explorerBase:
-        network === "mainnet"
-          ? "https://starkscan.co"
-          : "https://sepolia.starkscan.co",
-    },
+    ...(payDeps ? { pay: payDeps } : {}),
   },
   { host, allowedHosts },
 );
 
 app.listen(port, host, () => {
   console.log(`Tony Strk MCP server on http://${host}:${port}/mcp`);
-  console.log(wallet ? "pay: enabled (spending key present)" : "pay: disabled - no spending key, pay will refuse.");
+  console.log(
+    payDeps
+      ? "pay: enabled"
+      : "pay: disabled - set PAY_ENABLED=true and configure a spending key.",
+  );
   console.log(
     process.env.TOR_SOCKS_PROXY
       ? `Tor proxy configured: ${process.env.TOR_SOCKS_PROXY}`

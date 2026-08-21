@@ -22,13 +22,23 @@ async function connect(deps = {}) {
   return client;
 }
 
-test("an MCP client can discover the tools", async () => {
-  const client = await connect();
+test("pay is only discovered when explicitly enabled", async () => {
+  const disabledClient = await connect();
 
-  const { tools } = await client.listTools();
+  const { tools: disabledTools } = await disabledClient.listTools();
 
   assert.deepEqual(
-    tools.map((tool) => tool.name),
+    disabledTools.map((tool) => tool.name),
+    ["browse"],
+  );
+
+  const enabledClient = await connect({
+    pay: { wallet: {}, token: "STRK", explorerBase: "" },
+  });
+  const { tools: enabledTools } = await enabledClient.listTools();
+
+  assert.deepEqual(
+    enabledTools.map((tool) => tool.name),
     ["browse", "pay"],
   );
 });

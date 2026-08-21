@@ -54,44 +54,43 @@ export function createServer(deps: ServerDeps): McpServer {
     },
   );
 
-  server.registerTool(
-    "pay",
-    {
-      title: "Pay privately",
-      description:
-        "Pay a Starknet address out of the shielded STRK20 pool. The payee " +
-        "sees an amount arrive but cannot tell which depositor sent it. The " +
-        "amount itself is visible on-chain. Requires a self-hosted instance " +
-        "holding a spending key.",
-      inputSchema: {
-        to: z.string().describe("Recipient Starknet address, 0x-prefixed."),
-        amount: z
-          .string()
-          .describe('Amount in STRK as a decimal string, e.g. "1.5".'),
+  if (deps.pay) {
+    server.registerTool(
+      "pay",
+      {
+        title: "Pay privately",
+        description:
+          "Pay a Starknet address out of the shielded STRK20 pool. The payee " +
+          "sees an amount arrive but cannot tell which depositor sent it. The " +
+          "amount itself is visible on-chain. Requires a self-hosted instance " +
+          "holding a spending key.",
+        inputSchema: {
+          to: z.string().describe("Recipient Starknet address, 0x-prefixed."),
+          amount: z
+            .string()
+            .describe('Amount in STRK as a decimal string, e.g. "1.5".'),
+        },
+        outputSchema: {
+          transactionHash: z.string(),
+          recipient: z.string(),
+          amountWei: z.string().describe("The amount actually sent, in wei."),
+          explorerUrl: z.string(),
+        },
       },
-      outputSchema: {
-        transactionHash: z.string(),
-        recipient: z.string(),
-        amountWei: z.string().describe("The amount actually sent, in wei."),
-        explorerUrl: z.string(),
+      async ({ to, amount }) => {
+        const result = await pay({ to, amount }, deps.pay);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Paid ${amount} STRK to ${result.recipient}. ${result.explorerUrl}`,
+            },
+          ],
+          structuredContent: result,
+        };
       },
-    },
-    async ({ to, amount }) => {
-      const result = await pay(
-        { to, amount },
-        deps.pay ?? { wallet: null, token: "", explorerBase: "" },
-      );
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Paid ${amount} STRK to ${result.recipient}. ${result.explorerUrl}`,
-          },
-        ],
-        structuredContent: result,
-      };
-    },
-  );
+    );
+  }
 
   return server;
 }
