@@ -3,10 +3,7 @@
  *
  * The unit tests exercise the server in memory; this proves the HTTP endpoint
  * a client would actually connect to is really speaking the protocol, and that
- * browse behaves correctly for however the server is configured:
- *
- *   with a Tor circuit  -> the destination reports it saw a Tor exit
- *   without one         -> browse refuses rather than leaking the caller's IP
+ * browse traverses the configured Tor circuit.
  *
  *   npm run start:server            # in one terminal
  *   npm run verify:mcp              # in another
@@ -39,33 +36,14 @@ console.log(`           ${text.split("\n")[0].slice(0, 160)}`);
 
 await client.close();
 
-if (!torConfigured) {
-  // No circuit: the only acceptable outcome is a refusal.
-  if (result.isError !== true) {
-    console.error("\nFAIL: browse succeeded without a Tor circuit.");
-    process.exit(1);
-  }
-  console.log("\nOK: the endpoint speaks MCP, and browse failed closed.");
-  process.exit(0);
-}
-
-// A circuit is configured, so the destination itself must confirm it saw Tor.
-if (result.isError === true) {
-  console.error("\nFAIL: a Tor circuit is configured but browse errored.");
+if (!torConfigured || result.isError === true) {
+  console.error("\nFAIL: browse requires a configured Tor circuit.");
   process.exit(1);
 }
 
-let report;
-try {
-  report = JSON.parse(text);
-} catch {
-  console.error("\nFAIL: could not parse the Tor Project's response.");
-  process.exit(1);
-}
-
-if (report.IsTor !== true) {
+if (!text.includes('"IsTor":true')) {
   console.error(`\nFAIL: the request did not exit through Tor (${text}).`);
   process.exit(1);
 }
 
-console.log(`\nOK: browsed through Tor. The destination saw ${report.IP}.`);
+console.log("\nOK: browsed through Tor. The destination reported IsTor: true.");

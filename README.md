@@ -4,13 +4,12 @@
 
 When you send an agent out to do something on the web, it goes as you. Your IP, your card, your wallet. Every site it visits and everything it buys gets attributed back to you, in logs you don't control.
 
-Tony Strk is a **remote MCP server** that gives the agent its own way to get around. It works with any MCP client (Claude, Cursor, …).
-
-**Live demo:** https://tony-strk.vercel.app
+Tony Strk's active MCP server is **local-only**. It fetches public HTTP(S)
+URLs through Tor for any MCP client (Claude, Cursor, …).
 
 > The web sees the suit. Nobody sees the man inside.
 
-1. **Browse** — a cloud headless browser on a fresh Tor circuit per task. Sites see an exit relay, not your IP or your device.
+1. **Browse** — a Tor-routed HTTP fetcher. Sites see an exit relay, not your IP or your device.
 2. **Pay** — a private wallet holding **shielded STRK20** on Starknet. The chain, the payee and the operator can't link a payment back to you.
 
 You need both. An agent that browses anonymously and then pays from a wallet with a public history has just leaked everything it spent the last ten minutes protecting.
@@ -40,15 +39,15 @@ Tony Stark makes agent activity private by default — and auditable *only* by y
    └──────────┬───────────┘
        ┌──────┴───────┐          ← the two halves share NO identifier
        ▼              ▼
- Browser worker   Payment worker
-  Obscura + Tor    STRK20 shielded
-  + Tor            pool (ZK-STARK)
+ Tor HTTP fetcher  Payment worker
+       │            STRK20 shielded
+       │            pool (ZK-STARK)
        │              │
        ▼              ▼
    the website    STRK20 pool
 ```
 
-**One task, end to end:** the agent asks to browse → a fresh worker spawns on a new Tor circuit → the site sees a Tor exit, not you → the page demands payment → the payment worker builds a shielded intent → **your wallet** proves and signs it client-side → it settles gaslessly through the AVNU paymaster → content returns → metering is debited off-chain and settled in batches, so timing can't be correlated.
+**One task, end to end:** the agent asks to browse → the local server fetches a public URL through Tor → the site sees a Tor exit, not you → the page demands payment → the payment worker builds a shielded intent → **your wallet** proves and signs it client-side → it settles gaslessly through the AVNU paymaster → content returns → metering is debited off-chain and settled in batches, so timing can't be correlated.
 
 At no point does any single party hold both halves of the link.
 
@@ -61,7 +60,7 @@ A user can be traced through **five independent channels**. You're only as priva
 | # | Channel | Closed by |
 |---|---------|-----------|
 | 1 | **Network** (IP, TLS fingerprint) | Tor egress, fresh circuit per task |
-| 2 | **Browser** (cookies, persistence) | Obscura `--stealth`, fresh context per task, no logins, nothing survives between tasks |
+| 2 | **Fetch state** (cookies, persistence) | Stateless Tor-routed HTTP fetches; no browser session or logins |
 | 3 | **On-chain** (balance, amounts, graph) | STRK20 shielded pool — ZK-STARK notes |
 | 4 | **The on-ramp** (public deposit) | shared canonical pool's anonymity set, time-separated |
 | 5 | **The operators** (incl. *us*) | OHTTP, client-side keys, worker isolation, self-hostable |
@@ -101,7 +100,7 @@ Building in public, daily. Honest state:
 - [x] **Headless STRK20 wallet API proven** — all four privacy methods driven from pure Node, no browser
 - [x] Live hosted prover + discovery verified (OHTTP key matches the SDK repo's pinned config)
 - [x] Privacy pool addresses recovered and verified on-chain, both networks
-- [x] **Anonymous browsing proven end-to-end** — Obscura → Tor returns `{"IsTor":true}` from the Tor Project's own API
+- [x] **Anonymous browsing proven end-to-end** — local MCP → Tor returns `{"IsTor":true}` from the Tor Project's own API
 - [x] Sepolia account funded (faucet script) and **deployed** — can sign
 - [x] **Real ZK proof from StarkWare's hosted prover** — `apply_actions`, proof facts present
 - [x] **Submission via the AVNU paymaster** — proven transaction accepted on-chain
@@ -123,7 +122,7 @@ Two deployables, on purpose:
 
 | | | |
 |---|---|---|
-| `server/` | the MCP server | Express, its own host — because Tor cannot run on a serverless function |
+| `server/` | the MCP server | Express, local-only, with a Tor HTTP fetcher |
 | `app/` | the landing page | Next.js, static, on Vercel |
 
 TypeScript runs directly on Node 24's type stripping, so there is no build step for the server.
@@ -135,7 +134,8 @@ nvm use            # Node 24 (required by ohttp-ts, and for running .ts directly
 npm install
 npm run setup      # builds the privacy SDK from source (not on npm)
 
-npm run start:server   # the MCP server on http://127.0.0.1:8787/mcp
+TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server
+                       # the local MCP server on http://127.0.0.1:8787/mcp
 npm run dev            # the landing page
 npm test               # 9 tests
 
@@ -150,7 +150,7 @@ Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to
 
 | Script | Purpose |
 |---|---|
-| `scripts/verify-mcp.mjs` | connects a real MCP client to the running server, lists tools, and proves `browse` fails closed |
+| `server/verify-mcp.mjs` | connects a real MCP client to the running server and proves `browse` exits through Tor |
 | `scripts/spikes/check-services.mjs` | verifies prover, discovery, OHTTP, pool contracts on-chain, and that discovery serves our pool (with a control) |
 | `scripts/spikes/mock-wallet-spike.mjs` | proves the STRK20 wallet API works headlessly — no browser |
 | `scripts/faucet.mjs` | funds a Sepolia address (proof-of-work gated, no auth) |
@@ -166,9 +166,10 @@ Don't take the claims on trust:
 # every dependency is live, and discovery really serves our pool
 npm run spike:services
 
-# the destination confirms it cannot see you
-obscura --stealth --proxy socks5://127.0.0.1:9050 \
-        fetch https://check.torproject.org/api/ip --dump text
+# the destination confirms the local MCP server exits through Tor
+TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server
+# in another terminal
+npm run verify:mcp
 # → {"IsTor":true,"IP":"<a Tor exit>"}
 ```
 
@@ -194,7 +195,7 @@ Built by [Prathamesh Bhatkhande](https://github.com/prathadox) and [Aaronvern](h
 
 ## Built on
 
-[STRK20](https://www.starknet.io/blog/make-all-erc-20-tokens-private-with-strk20/) · [starknet-privacy](https://github.com/starkware-libs/starknet-privacy) · [starknet.js](https://starknetjs.com) · [AVNU Paymaster](https://github.com/avnu-labs/paymaster) · [OHTTP](https://www.rfc-editor.org/rfc/rfc9458) · [MCP](https://modelcontextprotocol.io) · [Obscura](https://github.com/h4ckf0r0day/obscura) · Tor
+[STRK20](https://www.starknet.io/blog/make-all-erc-20-tokens-private-with-strk20/) · [starknet-privacy](https://github.com/starkware-libs/starknet-privacy) · [starknet.js](https://starknetjs.com) · [AVNU Paymaster](https://github.com/avnu-labs/paymaster) · [OHTTP](https://www.rfc-editor.org/rfc/rfc9458) · [MCP](https://modelcontextprotocol.io) · Tor
 
 ## License
 
