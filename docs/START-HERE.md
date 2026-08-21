@@ -6,9 +6,9 @@ Everything you need to understand Tony Stark and start contributing. ~10 minutes
 
 ## 1. What we're building
 
-**A remote MCP server that gives any AI agent two abilities: browse the web without revealing who the user is, and pay for things without the payment being traceable to them.**
+**A local-only MCP server that lets an AI agent fetch public URLs through Tor, with an experimental private-payment path that is disabled by default.**
 
-It isn't an app — it's infrastructure. An agent (Claude, Cursor, whatever) connects over MCP and gains a disposable browser and a private wallet.
+An agent (Claude, Cursor, whatever) connects to the loopback HTTP endpoint. The active `browse` tool is a stateless HTTP fetcher, not a disposable browser: it does not execute JavaScript, accept logins, or preserve cookies. `pay` appears only when the operator explicitly enables it and supplies wallet configuration.
 
 The problem: AI agents are starting to spend money for people, and that leaves a trail two ways — the payment (a card the issuer watches, or a transparent wallet whose balance and full history are public forever) and the browsing (an IP that identifies the person). The more autonomous the agent, the more of your life becomes a public log.
 
@@ -21,24 +21,20 @@ We're building it for StarkWare's **STRK20 Private Sprint** (deadline **Aug 31**
 ## 2. How it works
 
 ```
-   AI agent (MCP client)
-            │  browse · extract · balance · topup · pay · reveal
+   AI agent (MCP client on this machine)
+            │  browse · optional pay
             ▼
    ┌──────────────────────┐
-   │  Tony Stark server   │
+   │  Tony Stark server   │  127.0.0.1:8787
    └──────────┬───────────┘
-        ┌─────┴──────┐   ← trust boundary: these two share NO identifier
-        ▼            ▼
-  Browser worker   Payment worker
-  Obscura + Tor    STRK20 shielded pool
-        │            │
-        ▼            ▼
-   the website    Starknet
-  (sees a Tor    (sees encrypted
-   exit, not you)  notes, not a graph)
+             │ validate public HTTP(S) URL
+             ▼
+       Tor HTTP fetcher ──► Tor ──► website
+             │                        (sees Tor egress)
+             └── optional wallet path ──► Starknet
 ```
 
-**The split is the whole design.** The half that browses and the half that pays share no identifier, so no single component — including one we run — ever holds both halves of the link.
+The current server is one local process. It keeps no browser session or request log, but it does not claim separate browsing/payment worker isolation.
 
 ### The payment, technically
 
@@ -57,7 +53,7 @@ Four actions we compose:
 
 ### Who proves, and who submits — these are different
 
-Generating the ZK proof is expensive and we don't do it. Either the user's wallet proves (`wallet_strk20PrepareInvoke` → a SNIP-36 proof) or we ask StarkWare's hosted prover. Either way we assemble intents and never hold keys — that's what keeps us non-custodial.
+Generating the ZK proof is expensive. The experimental local path asks StarkWare's hosted prover and signs with the key supplied to the local process. A future non-custodial path would instead ask the user's wallet to prove and sign (`wallet_strk20PrepareInvoke` → a SNIP-36 proof). Do not describe the current opt-in server path as keyless or non-custodial.
 
 **Then it has to be submitted, and that's a separate problem.** The SDK's `execute()` returns `{callAndProof, registry}` — proved, not submitted. Getting it on-chain means calling `apply_actions` **with the proof attached to the transaction**, and a plain starknet.js `Account` has no way to attach it. Only two things can:
 
@@ -72,7 +68,7 @@ Generating the ZK proof is expensive and we don't do it. Either the user's walle
 
 The prover reads **finalized** state, and the sequencer only accepts proofs whose base block is **≥10 blocks old**. So a shielded transfer per page-view is physically impossible.
 
-Hence: prepaid shielded balance → usage metered **off-chain** → settlement in **batches**. Not a workaround — the enforced delay also breaks timing correlation for free.
+The planned product shape is therefore: prepaid shielded balance → usage metered **off-chain** → settlement in **batches**. That metering and batching layer is not implemented in the active server.
 
 Fees go through AVNU's paymaster in `sponsored_private` mode, where the fee is paid *from inside the pool*, so paying gas doesn't produce a transparent transaction pointing back at the payer.
 
@@ -84,13 +80,13 @@ A user can be identified through **five independent channels**. You're only as p
 
 | # | Channel | Closed by |
 |---|---|---|
-| 1 | Network (IP, TLS) | Tor egress, fresh circuit per task ✅ *verified* |
-| 2 | Browser (cookies, persistence) | Obscura `--stealth`, fresh context per task, no logins |
+| 1 | Network (IP) | Tor egress for every browse request; no direct fallback ✅ *verified* |
+| 2 | Fetch state (cookies, persistence) | Stateless HTTP fetch; no browser, cookie jar, or login support |
 | 3 | On-chain (balance, graph) | STRK20 shielded notes, ZK-proved |
 | 4 | The on-ramp (funding) | shared pool's anonymity set, time-separated |
-| 5 | The operators (**including us**) | OHTTP, client-side keys, worker isolation, self-hostable |
+| 5 | The operator | Local-only, self-hosted process; no OHTTP relay/gateway is configured |
 
-**What we claim:** no single party — website, chain, payee, service operator, or us — can attribute the activity to the user.
+**What the active server claims:** a destination sees a Tor exit rather than the host IP, and the app does not persist browsing state. It does not promise a fresh Tor circuit per request, browser-fingerprint uniformity, operator blinding, or anonymous logged-in browsing.
 
 **What we don't claim:** that deposits are invisible, that a payee can't see an amount, or that logged-in browsing is anonymous. Overclaiming is how a privacy project gets taken apart in Q&A — please keep this discipline in anything you write.
 
@@ -108,16 +104,17 @@ Every deposit is screened against sanctions lists before a proof is issued — m
 |---|---|
 | Toolchain (Node 24, `starknet@10.7.0`) | ✅ verified |
 | Headless STRK20 wallet API | ✅ proven — all 4 methods, no browser |
-| Hosted prover + discovery | ✅ live, synced, OHTTP verified official |
+| Hosted prover + discovery | ✅ live and synced; an OHTTP key is advertised, but OHTTP is not configured locally |
 | Privacy pool contracts | ✅ verified on-chain, both networks |
-| Anonymous browsing | ✅ Obscura → Tor returns `IsTor:true` |
+| Anonymous browsing | ✅ local MCP → Tor returns `IsTor:true` |
 | Sepolia account | ✅ funded + deployed |
 | Real ZK proof from the hosted prover | ✅ proving works |
 | Submission via AVNU paymaster | ✅ works |
 | **Shielded deposit on-chain** | ✅ **3 STRK shielded** |
 | **Sanctions screening** | ✅ **passed** |
 | Private transfer | ⬜ next (pool is funded) |
-| MCP server, hero loop, mainnet | ⬜ to build |
+| Local MCP server | ✅ loopback-only `browse`; optional `pay` |
+| Hero loop, mainnet | ⬜ to build |
 
 **The money path works end to end** — SDK → hosted prover → ZK proof → paymaster → pool → Starknet:
 
@@ -145,19 +142,19 @@ npm run spike:services   # verifies every external dependency is live
 npm run spike:wallet     # drives the STRK20 wallet API headlessly
 ```
 
-`spike:services` is the one to run first. It checks the prover, discovery, OHTTP keys, both pool contracts on-chain, and that the discovery service actually serves our pool — **including a control** proving it rejects a pool it doesn't index, so a pass means something.
+`spike:services` checks the prover, discovery, advertised OHTTP keys, both pool contracts on-chain, and that the discovery service actually serves our pool. Seeing an OHTTP key verifies service capability; it does not configure a relay/gateway or establish operator blinding for this app.
 
 For browsing:
 
 ```bash
 sudo apt install tor    # SOCKS5 on 127.0.0.1:9050
-# download Obscura: github.com/h4ckf0r0day/obscura/releases
-obscura --stealth --proxy socks5://127.0.0.1:9050 \
-        fetch https://check.torproject.org/api/ip --dump text
-# → {"IsTor":true,...}
+TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server
+# in another terminal
+npm run verify:mcp
+# → {"IsTor":true,"IP":"<a Tor exit>"}
 ```
 
-**Secrets:** everything reads from env (`ACCOUNT_PRIVATE_KEY`), never from a committed file. `.env` is gitignored. **Testnet keys only** — the mainnet key stays in the wallet and signs through it.
+No `.env` is needed for browsing. If a gitignored root `.env` exists, Node loads it; otherwise safe defaults apply. Payment secrets can come from the environment, and `pay` remains absent unless `PAY_ENABLED=true`. **Testnet keys only.**
 
 ---
 
@@ -183,9 +180,9 @@ Ordered by what the score rewards. See [`BUILD-STEPS.md`](BUILD-STEPS.md) for th
 
 Now that the money path works, the payment layer is a **real dependency you can build against** rather than a stub — `scripts/submit-via-paymaster.mjs` is a working reference for shielding, and the same `SdkWallet` handles transfers.
 
-- **MCP server skeleton** — transport, tool registry, `node:sqlite` metering ledger (no identity column), worker isolation. Good first task; independent of the money path.
+- **MCP follow-up** — add `balance` / `topup` only when their wallet behavior is specified; metering and worker isolation remain future work.
 - **The STRK20 paywall endpoint** — a small service that returns 402 with a price and unlocks on payment. This is the hero demo's other half.
-- **Browser worker** — drive Obscura over CDP, fresh context + circuit per task, `browse`/`extract` tools.
+- **Browsing follow-up** — keep the current Tor HTTP fetcher hardened; add a browser worker only if JavaScript-rendered pages become a demonstrated requirement.
 - **Viewing-key `reveal`** — decrypt and display the user's own spend history. Cheap to build, big narrative payoff.
 
 **Coordinate before starting** so we don't collide — the money path is currently in progress.

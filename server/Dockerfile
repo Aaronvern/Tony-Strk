@@ -1,8 +1,5 @@
-# The MCP server, with a Tor daemon beside it.
-#
-# This is the reason the backend left Vercel: browse needs a local SOCKS
-# circuit, and Tor is a daemon that has to bootstrap and stay up, which a
-# serverless function cannot host.
+# Local diagnostics image: the MCP server and a Tor daemon in one container.
+# The server stays on loopback and is not a remote deployment target.
 FROM node:24-slim
 
 RUN apt-get update \
@@ -20,10 +17,8 @@ RUN npm install --omit=dev
 COPY server/ ./
 
 ENV NODE_ENV=production \
-    HOST=0.0.0.0 \
+    HOST=127.0.0.1 \
     PORT=8787 \
     TOR_SOCKS_PROXY=socks5://127.0.0.1:9050
-
-EXPOSE 8787
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

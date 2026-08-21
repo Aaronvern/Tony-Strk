@@ -1,10 +1,10 @@
 # Tony Stark — The Privacy Stack
 
-**The definitive answer to: "how is it actually private, and how can nothing trace back to the user?"**
+**Current guarantees, planned privacy layers, and residual leaks.**
 
-Privacy is not one feature. A user can be identified through **five independent channels**, and you are only as private as the leakiest one. This doc names each channel, the exact technology that closes it, and — critically — what still leaks. Nothing here is aspirational: every mechanism was verified against the `starkware-libs/starknet-privacy` source and the linked standards.
+Privacy is not one feature. A user can be identified through **five independent channels**, and you are only as private as the leakiest one. This doc separates what the active local server does today from payment architecture and future hardening.
 
-The governing rule: **no single party may be able to join two channels together.** Not the website, not the chain, not the payee, not a service operator, and not us.
+The product design goal is that no single party can join two channels together. The active local build has not completed every layer of that design.
 
 ---
 
@@ -12,11 +12,11 @@ The governing rule: **no single party may be able to join two channels together.
 
 | # | Traceability vector | What closes it | Hides | Residual leak (stated honestly) |
 | --- | --- | --- | --- | --- |
-| 1 | **Network** — your IP and TLS fingerprint reach the site | **Tor** via `--proxy socks5://`, HTTPS-only, **fresh circuit per task** — ✅ **verified end-to-end** (§2.6) | your IP + location from the website | a *global* adversary watching Tor entry **and** exit; some sites block Tor exits |
-| 2 | **Browser** — cookies, storage, persistence, logins | **Obscura `--stealth`** (self-consistent fingerprint, no automation tells), **fresh context per task**, zero persistent storage, **no logins** | any state that would join two of your tasks together | fingerprint-level uniformity is **not** claimed — see §2.5 |
+| 1 | **Network** — your IP reaches the site | **Tor** via the required SOCKS connector; no direct fallback — ✅ **verified end-to-end** (§2.6) | host IP + location from the website | no fresh-circuit guarantee; a global adversary can correlate Tor entry and exit; some sites block Tor |
+| 2 | **Fetch state** — cookies, storage, persistence, logins | stateless HTTP fetches with no browser, cookie jar, or login support | app-level browsing state that could join tasks | the site still sees the fetcher's HTTP/TLS fingerprint; JavaScript-rendered pages are unsupported |
 | 3 | **On-chain** — address, balance, amounts, transaction graph | **STRK20 shielded pool** (ZK-STARK notes, Poseidon/ECDH): `transfer` = fully private; `withdraw` = **sender-anonymous** *(+ shadow accounts once wallet-supported — roadmap)* | balance, amounts, who-paid-whom, spend history | deposit/withdraw **endpoints** are visible events — see channel 4 |
 | 4 | **The on-ramp** — putting STRK *into* the pool is a public deposit | the **shared canonical pool's anonymity set**, fund from a fresh account, **time-separate** deposit from spend | the link between "you deposited" and "you spent" | **privacy begins at the pool.** Depositing from a KYC'd exchange is traceable *up to* the pool boundary. Strength = crowd size |
-| 5 | **The operators** — RPC, prover, discovery, paymaster, **and us** | **OHTTP** (RFC 9458), **`sponsored_private` paymaster**, **client-side keys + proving**, **worker isolation**, **self-hostable** | your IP↔query at every service; stops *us* profiling you | you must trust the running code — hence open source + self-host |
+| 5 | **The operators** — local host, RPC, prover, discovery, paymaster | local-only self-hosting limits who operates the MCP endpoint | avoids a public Tony Strk service seeing browse requests | OHTTP relay/gateway is not configured; payment services can see connection metadata; an enabled payment process holds its configured key |
 
 ---
 
@@ -24,114 +24,92 @@ The governing rule: **no single party may be able to join two channels together.
 
 | Tool | Job in the stack |
 | --- | --- |
-| **Tor** | anonymous network egress for the browser worker (channel 1) |
-| **Obscura v0.2.0** (Rust headless engine, Apache-2.0) | disposable hardened browser: `--stealth` gives a **self-consistent** fingerprint (no automation tells) plus TLS impersonation and tracker blocking *when built with the `stealth` feature*; native DOM→Markdown for the agent; `--proxy socks5://` for Tor egress; SSRF-blocked by default. **30 MB / instant startup** — which is what makes a genuinely fresh browser *per task* affordable instead of aspirational (channels 1+2) |
+| **Tor** | anonymous network egress for the local HTTP fetcher (channel 1) |
+| **Stateless HTTP fetcher** | validates public HTTP(S) destinations and redirects, routes through Tor, bounds time/body size, and retains no browser state (channels 1+2) |
 | **STRK20 privacy pool + `@starkware-libs/starknet-privacy-sdk`** | shielded balances and confidential transfers — the on-chain privacy engine (channel 3) |
 | **STRK20 shadow accounts** (`strk20ShadowAccountCommitment`) — ⚠️ **roadmap, not MVP** | **a fresh, unlinkable on-chain identity per task/site**, mutually unlinkable and unlinkable to the user's real account; the *partial commitment* would let us credit a user's balance **without learning which shadow account or linking them** (channels 3+5). **Status:** in the spec and starknet.js, but **absent from the shipping Ready wallet v5.33.8** — so the MVP must not depend on it (see `SPIKE-RESULTS.md` §9) |
-| **Ready/Argent X or Xverse — Privacy Wallet API** | holds the spending key **and generates the ZK proof client-side**; our server never touches keys or the viewing key (channel 5) |
+| **Local SDK wallet (experimental)** | used only when `PAY_ENABLED=true` and key configuration is supplied; the current server process holds that key, so this is self-hosted testnet tooling rather than a non-custodial production wallet |
 | **AVNU `sponsored_private` paymaster** | gasless txs where the **fee is paid from inside the pool** — so paying gas doesn't deanonymize the payer (channels 3+5) |
-| **OHTTP (`ohttp-ts`, RFC 9458)** | HPKE-encapsulated requests through a relay/gateway split — the prover, discovery service, and our own egress never see IP↔query (channel 5) |
-| **Viewing keys** | the user (alone) can decrypt and reveal their own history — private by default, provable on demand |
-| **Prepaid balance + off-chain metering + batched settlement** | **timing decoupling**, so nobody can join "browsed X at 12:00:00" to "paid at 12:00:02" (channels 3+6) |
-| **Ready session keys + SNIP-9 outside execution** | agent spends autonomously within user-set caps/allowlists — without us custodying funds |
+| **OHTTP (`ohttp-ts`, RFC 9458)** | available in the underlying privacy SDK, but **not configured by this app**; operator blinding requires a real relay/gateway split (channel 5) |
+| **Viewing keys** | can decrypt private history; in the current opt-in server path, key material or its derivation input is local process configuration |
+| **Prepaid balance + off-chain metering + batched settlement** | roadmap only; no timing-decoupled metering service exists in the active server |
+| **Ready session keys + SNIP-9 outside execution** | roadmap only; not part of the active server |
 
 ---
 
-## 2.5. Randomization vs. uniformity — the precise claim for channel 2
+## 2.5. The precise claim for channel 2
 
-Two different goals get conflated here, and stating ours precisely is what keeps the claim defensible:
+The active implementation is not a browser. It performs one HTTP request chain, reduces HTML to readable text, and discards the response after returning it. There is no cookie jar, cache, local storage, JavaScript runtime, or login flow.
 
-Three different goals get conflated here. Stating ours precisely is what keeps the claim defensible.
-
-| Approach | Goal | Method |
-| --- | --- | --- |
-| **Anti-detect** (Obscura `--stealth`) | *"don't look automated"* | a **self-consistent** fingerprint with no automation tells |
-| **Anti-tracking** (per-session randomization) | *"don't link my sessions"* | **randomize** identifying surfaces per session |
-| **Anonymity** (Tor Browser) | *"look identical to everyone else"* | **uniformity** — every user presents the same fingerprint |
-
-⚠️ **Corrected after testing the binary.** An earlier draft of this doc credited Obscura with *per-session fingerprint randomization*. Its own `--help` says otherwise: *"consistent browser fingerprint, and with the `stealth` build feature, TLS impersonation plus tracker blocking."* That is the **first** row — anti-detection — and the tracker-blocking half is conditional on a build feature that may not be compiled into the release binary.
-
-**What that means for our claim.** Obscura keeps us from *looking automated*, which is what lets us reach sites at all. It does **not** by itself guarantee that two of our sessions are unlinkable by fingerprint. In this stack, the unlinkability we can actually defend comes from:
-
-- a **fresh browser context per task**, destroyed after — no cookies, storage, or cache survive;
-- a **fresh Tor circuit per task**, so the network identity differs every time;
-- **no logins, ever** — authenticating is deanonymizing.
-
-**So the honest claim for channel 2 is:** *no device identity of yours reaches the site, and nothing persists between tasks to join them up.* We do **not** claim fingerprint-level uniformity, and we do not claim a site is unable to fingerprint the browser it is talking to.
-
-**Roadmap if we want the stronger property:** compile Obscura with the `stealth` feature (TLS impersonation + tracker blocking), and add per-context fingerprint variation ourselves over CDP.
+That removes persistent browser state, but it does not provide browser-fingerprint randomization or uniformity. The destination can still observe the HTTP/TLS behavior of the Node fetcher, and multiple requests may use the same Tor circuit. The earlier Obscura browser-worker experiment is not part of the current architecture.
 
 ---
 
 ## 2.6. Channel 1, verified end-to-end
 
-Not a claim — a measurement. The full production stack (Obscura `--stealth` → SOCKS5 → Tor), with the Tor Project's own API as the oracle:
+The active local stack was measured through the MCP endpoint, using the Tor Project's API as the oracle:
 
 ```bash
-# direct
-obscura fetch https://check.torproject.org/api/ip --dump text
-  → {"IsTor":false,"IP":"<our real egress>"}
-
-# through Tor
-obscura --stealth --proxy socks5://127.0.0.1:9050 \
-        fetch https://check.torproject.org/api/ip --dump text
-  → {"IsTor":true,"IP":"192.42.116.20"}
+TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server
+# in another terminal
+npm run verify:mcp
+  → {"IsTor":true,"IP":"<a Tor exit>"}
 ```
 
-The destination sees a Tor exit node, not us — confirmed by the destination itself. Reproduce it any time; this is the cheapest honest demo of channel 1 we have, and it belongs in the video.
+The destination sees a Tor exit node rather than the host IP. This verifies egress routing, not per-request circuit rotation or browser-fingerprint protection.
 
 ---
 
-## 3. Why the operator (us) can't deanonymize you
+## 3. The current operator boundary
 
-This is the objection that kills most privacy products: *"you moved all the trust to your own server."* Four structural answers — not promises:
+The current answer is self-hosting, not operator-blinding infrastructure:
 
-1. **We never hold keys and never prove.** The user's wallet (Ready/Xverse) manages the viewing key and generates proofs. We build *unsigned* intents; the wallet signs (SNIP-12). We cannot spend your funds and cannot decrypt your notes.
-2. **Worker isolation — no join key.** The **browsing** worker and the **payment** worker are separate trust domains with **no shared identifier**. Even a fully compromised operator holds two unlinked halves, never one profile.
-3. **OHTTP on our own calls too.** We apply the protocol's own operator-blinding to our infrastructure, so our services don't see client IP↔request.
-4. **Ephemeral + no-log + self-hostable.** Sessions are destroyed after each task; the ledger keys on a *funded session credential*, never an identity. A maximalist self-hosts and trusts no one; the hosted tier's trust boundary is documented, not hidden.
+1. **The MCP endpoint is loopback-only.** It binds to `127.0.0.1`, so there is no public Tony Strk operator in the request path.
+2. **Browsing is stateless at the application layer.** The server has no cookie jar, browser profile, user database, or request log. The process and host can still observe a request while handling it.
+3. **Payments are off by default.** `pay` is registered only with `PAY_ENABLED=true` and complete wallet configuration. When enabled, this server process holds the supplied spending key; it is not the future client-side-wallet design.
+4. **OHTTP is not configured.** The repository has no deployed relay/gateway split, so it makes no current claim that RPC, prover, discovery, or paymaster operators cannot link connection metadata to requests.
+
+A future hosted service would need separate trust domains and an independently operated OHTTP relay/gateway before making stronger operator-resistance claims.
 
 ---
 
 ## 4. What "untraceable" honestly means
 
-No honest engineer promises literal, mathematical untraceability. The defensible claim:
+No honest engineer promises literal, mathematical untraceability. The defensible claim for the active browsing path is narrower:
 
-> **No single party — the website, the blockchain, the payee, any service operator, or us — can attribute this activity to the user; and the isolation + timing decoupling prevent them from combining forces to do so.**
+> **A public website sees Tor egress rather than the MCP host's IP, and the application retains no browsing session between requests.**
 
-Technically: *k-anonymity within the shielded pool* + *network-layer unlinkability* + *operator-blinding*.
+STRK20 can provide on-chain unlinkability for shielded transfers, but the active local server does not yet combine that with worker isolation, timing-decoupled settlement, or configured operator blinding.
 
 **Three residual risks we name rather than hide:**
 1. **The on-ramp (channel 4).** Privacy starts at the pool. Fund it privately, or accept that "you → pool" is visible while "pool → your spending" is not.
 2. **Anonymity-set size.** A pool with few users is weak privacy regardless of the cryptography. Always the shared canonical pool — **never deploy our own** (a private pool of one is transparent in practice).
-3. **A global passive adversary** correlating Tor timing against chain timing. Out of scope for anything short of a nation-state, but stated, not pretended away.
+3. **Traffic correlation.** The current server does not force a fresh Tor circuit or batch payments, so timing and repeated egress can still link activity.
 
 ---
 
 ## 5. One request, end to end
 
-How the layers compose in a single "research and buy" task:
+What one active browse request does:
 
-1. Agent calls `browse(url)` over the MCP server.
-2. A **fresh browser worker** spawns — new profile, new **Tor** circuit. The site sees a Tor exit IP and a generic fingerprint. *(channels 1–2)*
-3. Page hits a STRK20 paywall. The worker returns the payment requirement — **it does not know who the user is.** *(channel 5: isolation)*
-4. Agent calls `pay(...)`. The **payment worker** builds an unsigned shielded intent within the user's **session-key policy**. *(channel 5)*
-5. The **user's wallet** decrypts notes, generates the ZK proof **client-side**, and signs. Discovery/proving traffic rides **OHTTP**. *(channels 3+5)*
-6. Settlement goes out **gaslessly** via the `sponsored_private` paymaster — the fee comes from inside the pool, so no transparent fee tx points back to the user. *(channels 3+5)*
-7. Content unlocks. Metering is debited **off-chain** against the prepaid balance; on-chain settlement is **batched and delayed**, breaking timing correlation. *(channel 6)*
-8. Later, the user calls `reveal(viewingKey)` and audits every spend — **only they can.**
+1. A local agent calls `browse(url)` on `127.0.0.1:8787/mcp`.
+2. The server accepts only public HTTP(S) destinations, resolves the hostname, and repeats the check for redirects.
+3. The HTTP request uses the configured Tor SOCKS connector. Missing or failed Tor causes an error; there is no direct-network fallback.
+4. The server returns at most 1 MiB and reduces HTML to readable text unless raw output was requested.
+5. The request ends without retaining cookies, a browser profile, or an MCP session.
 
-At no point does any single party hold both halves of the link.
+If experimental `pay` is enabled, it runs in the same local process with the configured key. It should not be described as an isolated, client-side, OHTTP-protected production payment flow.
 
 ---
 
 ## 6. Rules we don't break
 
 1. Shared canonical pool only — never our own pool.
-2. Keys and proving stay client-side — the server is never custodial.
-3. Browsing and payment workers never share an identifier.
+2. Payment stays disabled unless the local operator explicitly enables and configures it.
+3. Do not claim browsing/payment worker isolation until separate workers exist.
 4. Privacy claims cover **shielded STRK20 on Starknet only** — transparent rails (x402/Base USDC) are labeled transparent. See `THREAT-MODEL.md` §4.5.
 5. No logged-in browsing — authenticating *is* deanonymizing.
 6. Never present devnet as mainnet.
+7. Do not claim fresh Tor circuits, browser fingerprint protection, or OHTTP operator blinding in the active build.
 
 See also: `PLAN.md` (product + build plan) · `THREAT-MODEL.md` (adversaries, precise claims, judge Q&A) · `READING-LIST.md` (background).
