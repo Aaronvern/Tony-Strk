@@ -1,52 +1,201 @@
 # Tony Strk
 
-Tony Strk is a local Web2 landing-page mapper plus a separately runnable stdio MCP `browse` tool.
+**Anonymous browsing and private payments for AI agents.**
 
-The landing page maps a conceptual route only. It never calls the MCP server or sends a request. The local MCP server validates one public HTTP(S) URL, uses a fresh Obscura browser context, and closes that context after the page is read.
+When you send an agent out to do something on the web, it goes as you. Your IP, your card, your wallet. Every site it visits and everything it buys gets attributed back to you, in logs you don't control.
 
-No wallets, STRK20 transactions, x402 payments, or remote deployment are included.
+Tony Strk is a **remote MCP server** that gives the agent its own way to get around. It works with any MCP client (Claude, Cursor, …).
 
-## Run locally
+**Live demo:** https://tony-strk.vercel.app
 
-Use Node 24 or newer.
+> The web sees the suit. Nobody sees the man inside.
+
+1. **Browse** — a cloud headless browser on a fresh Tor circuit per task. Sites see an exit relay, not your IP or your device.
+2. **Pay** — a private wallet holding **shielded STRK20** on Starknet. The chain, the payee and the operator can't link a payment back to you.
+
+You need both. An agent that browses anonymously and then pays from a wallet with a public history has just leaked everything it spent the last ten minutes protecting.
+
+Built for the [**STRK20 Private Sprint**](https://strk20.starknet.io/hackathon) — StarkWare's privacy hackathon. This is their own suggested build [**#11: Private AI Agent Payments**](https://www.starknet.io/blog/11-things-you-can-build-with-strk20-on-starknet/) — *"Agent wallets and autonomous payment flows are already starting to appear. The privacy side is the part that still needs to be built."*
+
+---
+
+## The problem
+
+AI agents are starting to spend money on your behalf. Today that means every purchase an agent makes is either tied to your card (KYC'd, surveilled, issuer sees everything) or to a transparent on-chain wallet (public balance, public spend graph, forever). Meanwhile the agent browses the web from an IP that identifies you.
+
+So the more autonomous your agent becomes, **the more of your life becomes a public log.**
+
+Tony Stark makes agent activity private by default — and auditable *only* by you.
+
+---
+
+## How it works
+
+```
+   AI agent (MCP client)
+            │
+            ▼
+   ┌──────────────────────┐
+   │  Tony Stark server   │   browse · extract · balance · topup · pay · reveal
+   └──────────┬───────────┘
+       ┌──────┴───────┐          ← the two halves share NO identifier
+       ▼              ▼
+ Browser worker   Payment worker
+  Obscura + Tor    STRK20 shielded
+  + Tor            pool (ZK-STARK)
+       │              │
+       ▼              ▼
+   the website    STRK20 pool
+```
+
+**One task, end to end:** the agent asks to browse → a fresh worker spawns on a new Tor circuit → the site sees a Tor exit, not you → the page demands payment → the payment worker builds a shielded intent → **your wallet** proves and signs it client-side → it settles gaslessly through the AVNU paymaster → content returns → metering is debited off-chain and settled in batches, so timing can't be correlated.
+
+At no point does any single party hold both halves of the link.
+
+---
+
+## Privacy model
+
+A user can be traced through **five independent channels**. You're only as private as the leakiest one:
+
+| # | Channel | Closed by |
+|---|---------|-----------|
+| 1 | **Network** (IP, TLS fingerprint) | Tor egress, fresh circuit per task |
+| 2 | **Browser** (cookies, persistence) | Obscura `--stealth`, fresh context per task, no logins, nothing survives between tasks |
+| 3 | **On-chain** (balance, amounts, graph) | STRK20 shielded pool — ZK-STARK notes |
+| 4 | **The on-ramp** (public deposit) | shared canonical pool's anonymity set, time-separated |
+| 5 | **The operators** (incl. *us*) | OHTTP, client-side keys, worker isolation, self-hostable |
+
+**What we claim:** no single party — website, chain, payee, service operator, or us — can attribute this activity to you, and isolation plus timing decoupling stop them from combining forces.
+
+**What we don't claim:** that deposits/withdrawals are invisible on-chain, that a payee can't see an amount, or that logged-in browsing is anonymous. Full detail, including the residual risks, in [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md).
+
+### Private by default, compliant by design
+
+Not a mixer. STRK20 screens every deposit against sanctions lists before a proof is issued, the pool carries a governance-set auditor key, and **you** hold a viewing key to reveal your own history to an accountant or auditor whenever you choose.
+
+---
+
+## STRK20 integration
+
+| Capability | Mechanism |
+|---|---|
+| Shield / unshield | `deposit` / `withdraw` pool actions |
+| Private payment | `transfer` (pool-native: fully private) · `withdraw` (external: sender-anonymous) |
+| Private balance | `strk20Balances` — balance held inside the pool |
+| ZK proving | `strk20PrepareInvoke` → SNIP-36 proof, generated **client-side by the user's wallet** |
+| Submission + fee privacy | AVNU paymaster — **the only way a server-side agent can submit a proven transaction**; `sponsored_private` also pays the fee *from inside the pool* |
+| Selective disclosure | viewing keys (`reveal`) |
+| Operator blinding | OHTTP (RFC 9458) on proving + discovery |
+
+---
+
+## Status
+
+Building in public, daily. Honest state:
+
+**The live demo does not move money yet.** It maps an MCP request through an ephemeral worker and Tor egress, and says so on the page. The payment path below is proven by script on Sepolia, not yet wired to the demo.
+
+- [x] Feasibility spikes — toolchain, SDK, hosted infra all verified ([`docs/SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md))
+- [x] Responsive Web2 demo with an honest, local-only route preview
+- [x] **Headless STRK20 wallet API proven** — all four privacy methods driven from pure Node, no browser
+- [x] Live hosted prover + discovery verified (OHTTP key matches the SDK repo's pinned config)
+- [x] Privacy pool addresses recovered and verified on-chain, both networks
+- [x] **Anonymous browsing proven end-to-end** — Obscura → Tor returns `{"IsTor":true}` from the Tor Project's own API
+- [x] Sepolia account funded (faucet script) and **deployed** — can sign
+- [x] **Real ZK proof from StarkWare's hosted prover** — `apply_actions`, proof facts present
+- [x] **Submission via the AVNU paymaster** — proven transaction accepted on-chain
+- [x] 🎉 **Shielded deposit landed, sanctions screening passed** — [`0x3e74d5…`](https://sepolia.starkscan.co/tx/0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349)
+- [ ] Private transfer ← *next (pool is funded)*
+- [ ] MCP server + `balance` / `topup`
+- [ ] Payment loop + STRK20 paywall + gasless settlement
+- [ ] Anonymous browsing worker
+- [ ] **Mainnet**
+- [ ] Viewing-key `reveal`
+
+Nothing here is presented as working before it is. Devnet is never shown as mainnet.
+
+---
+
+## Layout
+
+Two deployables, on purpose:
+
+| | | |
+|---|---|---|
+| `server/` | the MCP server | Express, its own host — because Tor cannot run on a serverless function |
+| `app/` | the landing page | Next.js, static, on Vercel |
+
+TypeScript runs directly on Node 24's type stripping, so there is no build step for the server.
+
+## Quickstart
 
 ```bash
+nvm use            # Node 24 (required by ohttp-ts, and for running .ts directly)
 npm install
-npm run dev
+npm run setup      # builds the privacy SDK from source (not on npm)
+
+npm run start:server   # the MCP server on http://127.0.0.1:8787/mcp
+npm run dev            # the landing page
+npm test               # 9 tests
+
+npm run verify:mcp        # drive the running MCP server with a real MCP client
+npm run spike:services    # verify every external dependency is live
+npm run spike:wallet      # drive the STRK20 wallet API headlessly
 ```
 
-To enable the separately runnable MCP tool, start local Tor and Obscura first:
+Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to 10.0.2, which predates the STRK20 API.
+
+### Scripts
+
+| Script | Purpose |
+|---|---|
+| `scripts/verify-mcp.mjs` | connects a real MCP client to the running server, lists tools, and proves `browse` fails closed |
+| `scripts/spikes/check-services.mjs` | verifies prover, discovery, OHTTP, pool contracts on-chain, and that discovery serves our pool (with a control) |
+| `scripts/spikes/mock-wallet-spike.mjs` | proves the STRK20 wallet API works headlessly — no browser |
+| `scripts/faucet.mjs` | funds a Sepolia address (proof-of-work gated, no auth) |
+| `scripts/deploy-account.mjs` | deploys a counterfactual Ready/Argent account |
+
+Secrets come from the environment (`ACCOUNT_PRIVATE_KEY`), never from a file. `.env` is gitignored — **use testnet keys only**.
+
+## Verify it yourself
+
+Don't take the claims on trust:
 
 ```bash
-obscura serve --host 127.0.0.1 --port 9222 --stealth --proxy socks5://127.0.0.1:9050
-npm run mcp
+# every dependency is live, and discovery really serves our pool
+npm run spike:services
+
+# the destination confirms it cannot see you
+obscura --stealth --proxy socks5://127.0.0.1:9050 \
+        fetch https://check.torproject.org/api/ip --dump text
+# → {"IsTor":true,"IP":"<a Tor exit>"}
 ```
 
-The MCP server exposes one tool:
+---
 
-```text
-browse({ url })
-```
+## Docs
 
-It rejects non-HTTP(S), credential-bearing, localhost, private, link-local, metadata, and DNS-resolved private destinations. It has no direct `fetch` fallback.
+**New here? Read [`docs/START-HERE.md`](docs/START-HERE.md)** — the product, the technical core, current state, and how to get running, in about ten minutes.
 
-## Optional OHTTP mode
+| Doc | What's in it |
+|---|---|
+| [`START-HERE.md`](docs/START-HERE.md) | ⭐ onboarding — read this first |
+| [`PLAN.md`](docs/PLAN.md) | the product, architecture, scope, schedule |
+| [`PRIVACY-STACK.md`](docs/PRIVACY-STACK.md) | how it's private — the five channels, in depth |
+| [`THREAT-MODEL.md`](docs/THREAT-MODEL.md) | adversaries, precise claims, the hard questions answered |
+| [`SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md) | what we verified first-hand, with evidence |
+| [`BUILD-STEPS.md`](docs/BUILD-STEPS.md) | step-by-step build guide |
+| [`READING-LIST.md`](docs/READING-LIST.md) | annotated background reading |
 
-Set all three values in `.env` to switch the MCP tool from the local worker path to OHTTP:
+## Team
 
-```bash
-OHTTP_RELAY_URL=https://relay.example/ohttp
-OHTTP_GATEWAY_URL=https://gateway.example/ohttp
-OHTTP_GATEWAY_KEY_CONFIG=<base64-public-key-config>
-```
+Built by [Prathamesh Bhatkhande](https://github.com/prathadox) and [Aaronvern](https://github.com/Aaronvern) for the STRK20 Private Sprint.
 
-The relay must be configured to forward to the gateway selected for that key configuration. OHTTP only provides a privacy boundary with independently operated relay and gateway services. A local relay/gateway protocol test is not anonymity.
+## Built on
 
-## Verify
+[STRK20](https://www.starknet.io/blog/make-all-erc-20-tokens-private-with-strk20/) · [starknet-privacy](https://github.com/starkware-libs/starknet-privacy) · [starknet.js](https://starknetjs.com) · [AVNU Paymaster](https://github.com/avnu-labs/paymaster) · [OHTTP](https://www.rfc-editor.org/rfc/rfc9458) · [MCP](https://modelcontextprotocol.io) · [Obscura](https://github.com/h4ckf0r0day/obscura) · Tor
 
-```bash
-npm test
-npm run build
-```
+## License
 
-Built locally by [prathadox](https://github.com/prathadox) and [Aaronvern](https://github.com/Aaronvern) for the STRK20 Private Sprint. Nothing is pushed or deployed by this repository setup.
+Apache-2.0

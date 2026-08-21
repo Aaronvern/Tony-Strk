@@ -24,3 +24,7 @@ tor-data/
 # built-from-source SDK (see scripts/setup-sdk.sh)
 vendor/
 .vercel
+
+# Cairo build output
+contracts/target/
+.snfoundry_cache/

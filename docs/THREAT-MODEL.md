@@ -15,8 +15,8 @@ A privacy product is only as strong as its weakest observer. There are seven.
 | 1 | **The websites** the agent visits | user's IP, device fingerprint, identity, that *this person* viewed *this page* | headless browser exits via Tor/proxy; ephemeral session per task; HTTPS-only; **no logins** (out of scope by design) |
 | 2 | **On-chain observers** | balances, amounts, who-paid-whom | STRK20 shielded notes (encrypted, Poseidon/ECDH). Deposits & withdrawals are visible *endpoints*; the links between them are hidden inside the anonymity set |
 | 3 | **The payee** (service being paid) | which user paid them, and links to the user's other spend | **sender-anonymous**: an external payment is a pool `withdraw` — the payee sees an amount arrive but cannot tell which shielded user sent it. Pool-native payees get a fully private `transfer` |
-| 4 | **The prover / discovery operator** | could correlate a user's IP with the notes/proofs they request | protocol uses **OHTTP (RFC 9458)** — requests are HPKE-encapsulated through a relay+gateway split, so the service operator never sees client IP↔query |
-| 5 | **US — the Tony Stark operator** | *everything*: URLs browsed + content + who funded + what was paid | **the central design problem — see §3.** Client-side keys, worker isolation, no-log ephemeral sessions, OHTTP for our own calls, and a self-hostable open-source server |
+| 4 | **The prover / discovery operator** | could correlate a user's IP with the notes/proofs they request | **OHTTP (RFC 9458)** — HPKE-encapsulated, passed on both the proving and discovery providers, on by default. Contents are blinded. **IP is only blinded once `OHTTP_RELAY_URL` is set**: without the relay/gateway split the gateway still sees the connection |
+| 5 | **US — the Tony Stark operator** | *everything*: URLs browsed + content + who funded + what was paid | **the central design problem — see §3.** Client-side keys, worker isolation, no-log ephemeral sessions, Tor egress on the browser worker, and a self-hostable open-source server |
 | 6 | **A timing correlator** watching both a site access and an on-chain withdraw | could link "accessed X at T" to "withdraw at T+ε" | decouple access from settlement: prepaid credits, **batched** settlement, and the protocol's own proof-timing delay already break tight coupling (§5) |
 | 7 | **Anonymity-set collapse** (a near-empty pool) | if only one user deposited near a withdraw, statistical linking | **only ever use the canonical shared STRK20 pool** — never deploy our own. Privacy scales with the shared set; a private pool of one is not private (§6) |
 
@@ -28,7 +28,7 @@ For each observer, what is **Hidden ✅** vs **Visible ⚠️**. This is the exa
 
 | Data element | Websites | On-chain | Payee | Prover/Discovery | Operator (hosted) |
 | --- | --- | --- | --- | --- | --- |
-| User IP / device | ✅ hidden | ✅ n/a | ✅ hidden | ✅ hidden (OHTTP) | ⚠️ mitigated, §3 |
+| User IP / device | ✅ hidden | ✅ n/a | ✅ hidden | ⚠️ visible unless a relay is set (contents ✅ hidden via OHTTP) | ⚠️ mitigated, §3 |
 | Which pages browsed | ✅ hidden* | ✅ n/a | ✅ n/a | ✅ n/a | ⚠️ mitigated, §3 |
 | Wallet balance | ✅ n/a | ✅ hidden | ✅ hidden | ✅ hidden | ✅ hidden (client keys) |
 | Payment amount to a payee | ✅ n/a | ⚠️ visible at withdraw | ⚠️ visible | ✅ hidden | ✅ hidden |
@@ -51,7 +51,7 @@ This is the correct objection, and it is the one most privacy products fail. Our
 
 1. **Client-side keys and signing.** The server never holds the user's spending key or viewing key. The `starknet-privacy` client (`SdkWallet` + SNIP-12 signer) signs proof invocations **client-side**; we build unsigned transactions, the user's side signs. We cannot spend, and we cannot decrypt their notes.
 2. **Worker isolation — no join key.** The browsing worker and the payment worker are separate trust domains with **no shared identifier** linking "session that browsed X" to "wallet that paid Y." A compromised or subpoenaed operator has two unlinked halves, not one profile.
-3. **OHTTP for our own calls, too.** We mirror the protocol's approach: the browser worker's fetches and (where the transport allows) the MCP calls go through an OHTTP relay/gateway split, so even our own infrastructure doesn't see client IP↔request.
+3. **Tor for the browser worker's own fetches.** The worker reaches destinations over a SOCKS circuit, so the operator's egress IP is a Tor exit rather than anything tied to the user, and the destination hostname is resolved *at the exit relay* rather than locally — otherwise the traffic is tunnelled while the DNS lookups leak. **Not yet true of the MCP call itself:** a hosted client still connects to us directly, so a hosted operator sees the caller's IP at that hop. Closing it means fronting the MCP endpoint with an OHTTP relay/gateway split, or the user running their own instance. Until then, item 5 is the honest mitigation, not this one.
 4. **Ephemeral, no-log sessions.** Browser sessions are torn down after each task; no persistent user↔session map is written. The metering ledger keys on a *funded session credential*, never on a user identity.
 5. **Open-source and self-hostable.** The whole server is open source; a privacy-maximalist runs their own instance and trusts no one. The hosted tier is a convenience with a **documented, explicit trust boundary** — we state plainly what a hosted operator can and cannot see, rather than pretending it's zero.
 
@@ -65,9 +65,16 @@ A judge may ask this, and the honest answer is a strength — but only if we sta
 
 **What the prover necessarily sees:** the actions it is asked to prove. The proving service executes client actions in virtual Starknet blocks to produce the validity proof, so **transaction contents pass through it**.
 
-**What the prover does not see:** *who you are.* The SDK wraps proving and discovery calls in **OHTTP (RFC 9458)** — HPKE-encapsulated through a relay/gateway split, so the operator never learns the client IP or links queries to a user. Verified live: the hosted prover serves a real OHTTP key config, and it byte-matches the pinned config shipped in the SDK repo.
+**What the prover need not see:** *who you are* — but only if OHTTP is switched on, and it is **off by default**.
 
-So the boundary is: **blinded on identity, not on transaction contents.**
+The SDK *can* wrap proving and discovery calls in **OHTTP (RFC 9458)**, HPKE-encapsulating them so the operator reads neither the request nor the response. It is an optional field (`ohttp?: OhttpOption` on the proving-service and discovery config), so a caller that omits it gets ordinary HTTPS. **The MCP server now passes it on both providers** (`server/src/pay/wallet.ts`), controlled by `OHTTP_ENABLED`, which defaults on. The standalone scripts in `scripts/` still omit it, so the Sepolia deposit already recorded was made without it.
+
+Two things to get right when we do enable it:
+
+- **Encryption is not unlinkability.** The IP-blinding property comes from the relay/gateway *split* — the relay sees your IP but not the request, the gateway sees the request but not your IP. The SDK's `relayUrl` is optional; with OHTTP on and no relay, you are handing an encrypted request straight to the gateway, which still sees the connection. That is confidentiality, not anonymity.
+- Verified live: the hosted prover does serve a real OHTTP key config, byte-matching the one pinned in the SDK repo, so the gateway side genuinely exists.
+
+So the boundary today is: **blinded on contents, not yet on identity** — OHTTP is on, but no relay is configured, so the gateway still sees the connection. Set `OHTTP_RELAY_URL` and identity is blinded too. Contents are never hidden from the prover, by design: it has to execute the actions to prove them.
 
 ### Consequence for our mainnet route
 

@@ -2,35 +2,33 @@
   "name": "tony-strk",
   "version": "0.1.0",
   "private": true,
-  "description": "A private browsing interface for AI agents, with STRK20 settlement planned next",
+  "description": "Anonymous browsing and private payments for AI agents.",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
     "node": ">=24"
   },
+  "workspaces": [
+    "web",
+    "server"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "mcp": "node mcp/server.mjs",
-    "test": "node --test \"tests/**/*.test.mjs\"",
-    "typecheck": "tsc --noEmit",
+    "dev": "npm run dev --workspace @tony-strk/web",
+    "build": "npm run build --workspace @tony-strk/web",
+    "dev:server": "npm run dev --workspace @tony-strk/server",
+    "start:server": "npm run start --workspace @tony-strk/server",
+    "test": "npm run test --workspaces --if-present",
+    "test:contracts": "cd contracts && snforge test",
+    "build:contracts": "cd contracts && scarb build",
+    "verify:mcp": "npm run verify:mcp --workspace @tony-strk/server",
     "spike:wallet": "node scripts/spikes/mock-wallet-spike.mjs",
     "spike:services": "node scripts/spikes/check-services.mjs",
     "setup": "bash scripts/setup-sdk.sh"
   },
   "dependencies": {
-    "@modelcontextprotocol/server": "2.0.0",
     "@starkware-libs/starknet-privacy-client": "file:vendor/starknet-privacy/client",
     "@starkware-libs/starknet-privacy-sdk": "file:vendor/starknet-privacy/sdk",
-    "hpke": "1.1.4",
-    "next": "^16.1.0",
-    "ohttp-ts": "0.4.1",
-    "puppeteer-core": "25.8.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "starknet": "^10.7.0",
-    "zod": "4.2.0"
+    "starknet": "^10.7.0"
   },
   "devDependencies": {
     "typescript": "^5.7.0"
