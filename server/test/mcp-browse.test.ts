@@ -39,6 +39,86 @@ test("browse rejects non-http schemes even when a proxy is configured", async ()
   assert.equal(attempted, false, "must not read local files for the agent");
 });
 
+test("browse rejects credential-bearing URLs before fetching", async () => {
+  let attempted = false;
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "https://token@example.com/article" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => {
+            attempted = true;
+            return new Response("leaked");
+          },
+        },
+      ),
+    /credentials/i,
+  );
+
+  assert.equal(attempted, false, "must reject credentials before the request");
+});
+
+test("browse rejects redirects to private addresses", async () => {
+  let attempts = 0;
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "https://8.8.8.8/article" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => {
+            attempts++;
+            return new Response(null, {
+              status: 302,
+              headers: { location: "http://127.0.0.1:8787/private" },
+            });
+          },
+        },
+      ),
+    /public/i,
+  );
+
+  assert.equal(attempts, 1, "must not fetch the rejected redirect target");
+});
+
+test("browse rejects private addresses before fetching", async () => {
+  let attempted = false;
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "http://127.0.0.1:8787" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => {
+            attempted = true;
+            return new Response("leaked");
+          },
+        },
+      ),
+    /public/i,
+  );
+
+  assert.equal(attempted, false, "must reject private targets before the request");
+});
+
+test("browse rejects a response larger than 1 MiB", async () => {
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "https://8.8.8.8/article" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => new Response("x", { headers: { "content-length": "1048577" } }),
+        },
+      ),
+    /1 MiB/i,
+  );
+});
+
 test("browse returns page text fetched through the configured proxy", async () => {
   const seen = {};
   const fetchImpl = (target, options) => {
@@ -70,7 +150,7 @@ test("browse flags a 402 as a paywall rather than returning the page", async () 
     new Response("<html>Pay 5 STRK to read this</html>", { status: 402 });
 
   const result = await browse(
-    { url: "https://paywalled.example/article" },
+    { url: "https://example.com/article" },
     { torProxy: "socks5://127.0.0.1:9050", fetchImpl },
   );
 

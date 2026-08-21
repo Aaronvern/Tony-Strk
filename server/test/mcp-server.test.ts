@@ -54,7 +54,7 @@ test("a paywalled page tells the client that payment is required", async () => {
 
   const result = await client.callTool({
     name: "browse",
-    arguments: { url: "https://paywalled.example/article" },
+    arguments: { url: "https://example.com/article" },
   });
 
   // Without this the agent gets the paywall's HTML and no way to tell it

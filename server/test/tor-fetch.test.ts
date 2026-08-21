@@ -124,3 +124,26 @@ test("torFetch fails instead of connecting directly when the proxy is down", asy
     }),
   );
 });
+
+test("torFetch preserves manual redirects through the SOCKS proxy", async (t) => {
+  const origin = http.createServer((_req, res) => {
+    res.writeHead(302, { location: "http://127.0.0.1/private" });
+    res.end();
+  });
+  t.after(() => new Promise((r) => origin.close(r)));
+  const originPort = await listen(origin);
+
+  const socks = startSocks5([]);
+  t.after(() => new Promise((r) => socks.close(r)));
+  const socksPort = await listen(socks);
+
+  const torFetch = createTorFetch();
+  t.after(() => torFetch.close());
+  const response = await torFetch(`http://127.0.0.1:${originPort}/`, {
+    proxy: `socks5://127.0.0.1:${socksPort}`,
+    redirect: "manual",
+  });
+
+  assert.equal(response.status, 302, "browse must validate the redirect itself");
+  assert.equal(response.headers.get("location"), "http://127.0.0.1/private");
+});

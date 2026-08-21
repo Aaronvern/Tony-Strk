@@ -18,7 +18,11 @@ export function createTorFetch() {
 
   async function torFetch(
     target: string,
-    { proxy }: { proxy: string },
+    { proxy, redirect, signal }: {
+      proxy: string;
+      redirect?: "manual";
+      signal?: AbortSignal;
+    },
   ): Promise<Response> {
     let agent = agents.get(proxy);
     if (!agent) {
@@ -28,6 +32,8 @@ export function createTorFetch() {
 
     return (await undiciFetch(target, {
       dispatcher: agent,
+      redirect,
+      signal,
     })) as unknown as Response;
   }
 

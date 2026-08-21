@@ -1,4 +1,8 @@
 import { extractText } from "./extract.ts";
+import { assertPublicHttpUrl } from "./url-policy.ts";
+
+const MAX_BODY_BYTES = 1024 * 1024;
+const MAX_REDIRECTS = 5;
 
 export interface BrowseInput {
   url: string;
@@ -12,7 +16,7 @@ export interface BrowseDeps {
   /** Injected so tests can drive the tool without a live circuit. */
   fetchImpl: (
     target: string,
-    options: { proxy: string },
+    options: { proxy: string; redirect: "manual"; signal: AbortSignal },
   ) => Response | Promise<Response>;
 }
 
@@ -37,11 +41,6 @@ export async function browse(
 ): Promise<BrowseResult> {
   const { torProxy } = deps;
 
-  const url = new URL(input.url);
-  if (!["http:", "https:"].includes(url.protocol)) {
-    throw new Error("Use an HTTP or HTTPS URL.");
-  }
-
   if (!torProxy) {
     throw new Error(
       "Refusing to browse: no Tor proxy configured. Set TOR_SOCKS_PROXY. " +
@@ -49,8 +48,20 @@ export async function browse(
     );
   }
 
-  const response = await deps.fetchImpl(url.toString(), { proxy: torProxy });
-  const body = await response.text();
+  let url = await assertPublicHttpUrl(input.url);
+  let response: Response;
+  for (let redirects = 0; ; redirects++) {
+    response = await deps.fetchImpl(url.toString(), {
+      proxy: torProxy,
+      redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
+    });
+    const location = response.headers.get("location");
+    if (!location || response.status < 300 || response.status >= 400) break;
+    if (redirects >= MAX_REDIRECTS) throw new Error("Too many redirects.");
+    url = await assertPublicHttpUrl(new URL(location, url).toString());
+  }
+  const body = await readBody(response!);
 
   // Only HTML gets reduced. Running the extractor over JSON or plain text
   // would mangle a response the caller can already read.
@@ -64,4 +75,32 @@ export async function browse(
     title: extracted?.title ?? "",
     text: extracted?.text ?? body,
   };
+}
+
+async function readBody(response: Response): Promise<string> {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (contentLength > MAX_BODY_BYTES) throw new Error("Response body exceeds 1 MiB.");
+  if (!response.body) return "";
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BODY_BYTES) throw new Error("Response body exceeds 1 MiB.");
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const body = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(body);
 }
