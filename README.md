@@ -93,7 +93,7 @@ Not a mixer. STRK20 screens every deposit against sanctions lists before a proof
 
 Building in public, daily. Honest state:
 
-**The active local server does not move money yet.** It maps MCP browse requests through stateless Tor-routed HTTP fetches. The payment path below is proven by script on Sepolia, not wired to the local server.
+**The active local server keeps payments disabled by default.** It exposes `pay` only when `PAY_ENABLED=true` and wallet configuration are present; browse maps MCP requests through stateless Tor-routed HTTP fetches.
 
 - [x] Feasibility spikes — toolchain, SDK, hosted infra all verified ([`docs/SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md))
 - [x] Responsive Web2 demo with an honest, local-only route preview
