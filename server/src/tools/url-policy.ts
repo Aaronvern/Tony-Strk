@@ -3,10 +3,15 @@ import { isIP } from "node:net";
 
 type Lookup = typeof dns.promises.lookup;
 
+export interface PublicHttpUrl {
+  url: URL;
+  address: string;
+}
+
 export async function assertPublicHttpUrl(
   value: string,
   lookup: Lookup = dns.promises.lookup,
-): Promise<URL> {
+): Promise<PublicHttpUrl> {
   let url: URL;
   try {
     url = new URL(value);
@@ -27,7 +32,7 @@ export async function assertPublicHttpUrl(
     throw new Error("Browse only supports public addresses.");
   }
 
-  return url;
+  return { url, address: addresses[0].address };
 }
 
 function isPublicAddress(address: string): boolean {
@@ -53,6 +58,7 @@ function isPublicAddress(address: string): boolean {
 function isPublicIpv4(address: string): boolean {
   const [a, b] = address.split(".").map(Number);
   return !(
+    address === "100.100.100.200" ||
     a === 0 || a === 10 || a === 127 ||
     (a === 100 && b >= 64 && b <= 127) ||
     (a === 169 && b === 254) ||

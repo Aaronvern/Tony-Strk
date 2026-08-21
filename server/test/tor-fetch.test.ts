@@ -147,3 +147,24 @@ test("torFetch preserves manual redirects through the SOCKS proxy", async (t) =>
   assert.equal(response.status, 302, "browse must validate the redirect itself");
   assert.equal(response.headers.get("location"), "http://127.0.0.1/private");
 });
+
+test("torFetch connects SOCKS to the vetted address instead of the hostname", async (t) => {
+  const origin = http.createServer((_req, res) => res.end("bound"));
+  t.after(() => new Promise((r) => origin.close(r)));
+  const originPort = await listen(origin);
+
+  const seen: string[] = [];
+  const socks = startSocks5(seen);
+  t.after(() => new Promise((r) => socks.close(r)));
+  const socksPort = await listen(socks);
+
+  const torFetch = createTorFetch();
+  t.after(() => torFetch.close());
+  const response = await torFetch(`http://127.0.0.2:${originPort}/`, {
+    proxy: `socks5://127.0.0.1:${socksPort}`,
+    address: "127.0.0.1",
+  });
+
+  assert.equal(await response.text(), "bound");
+  assert.deepEqual(seen, [`127.0.0.1:${originPort}`]);
+});

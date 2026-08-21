@@ -16,7 +16,7 @@ export interface BrowseDeps {
   /** Injected so tests can drive the tool without a live circuit. */
   fetchImpl: (
     target: string,
-    options: { proxy: string; redirect: "manual"; signal: AbortSignal },
+    options: { proxy: string; address: string; redirect: "manual"; signal: AbortSignal },
   ) => Response | Promise<Response>;
 }
 
@@ -48,18 +48,19 @@ export async function browse(
     );
   }
 
-  let url = await assertPublicHttpUrl(input.url);
+  let { url, address } = await assertPublicHttpUrl(input.url);
   let response: Response;
   for (let redirects = 0; ; redirects++) {
     response = await deps.fetchImpl(url.toString(), {
       proxy: torProxy,
+      address,
       redirect: "manual",
       signal: AbortSignal.timeout(15_000),
     });
     const location = response.headers.get("location");
     if (!location || response.status < 300 || response.status >= 400) break;
     if (redirects >= MAX_REDIRECTS) throw new Error("Too many redirects.");
-    url = await assertPublicHttpUrl(new URL(location, url).toString());
+    ({ url, address } = await assertPublicHttpUrl(new URL(location, url).toString()));
   }
   const body = await readBody(response!);
 
@@ -90,7 +91,10 @@ async function readBody(response: Response): Promise<string> {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BODY_BYTES) throw new Error("Response body exceeds 1 MiB.");
+      if (size > MAX_BODY_BYTES) {
+        await reader.cancel().catch(() => {});
+        throw new Error("Response body exceeds 1 MiB.");
+      }
       chunks.push(value);
     }
   } finally {

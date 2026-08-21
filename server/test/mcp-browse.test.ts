@@ -105,6 +105,27 @@ test("browse rejects private addresses before fetching", async () => {
   assert.equal(attempted, false, "must reject private targets before the request");
 });
 
+test("browse rejects Alibaba metadata addresses before fetching", async () => {
+  let attempted = false;
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "http://100.100.100.200/latest/meta-data" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => {
+            attempted = true;
+            return new Response("leaked");
+          },
+        },
+      ),
+    /public/i,
+  );
+
+  assert.equal(attempted, false, "must reject metadata before the request");
+});
+
 test("browse rejects a response larger than 1 MiB", async () => {
   await assert.rejects(
     () =>
@@ -117,6 +138,32 @@ test("browse rejects a response larger than 1 MiB", async () => {
       ),
     /1 MiB/i,
   );
+});
+
+test("browse cancels an oversized response stream", async () => {
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(1024 * 1024 + 1));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "https://8.8.8.8/article" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => new Response(stream),
+        },
+      ),
+    /1 MiB/i,
+  );
+
+  assert.equal(cancelled, true, "must stop an oversized sender");
 });
 
 test("browse returns page text fetched through the configured proxy", async () => {
