@@ -59,7 +59,7 @@ A user can be traced through **five independent channels**. You're only as priva
 
 | # | Channel | Closed by |
 |---|---------|-----------|
-| 1 | **Network** (IP, TLS fingerprint) | Tor egress, fresh circuit per task |
+| 1 | **Network** (IP, TLS fingerprint) | Tor egress for stateless public HTTP fetches |
 | 2 | **Fetch state** (cookies, persistence) | Stateless Tor-routed HTTP fetches; no browser session or logins |
 | 3 | **On-chain** (balance, amounts, graph) | STRK20 shielded pool — ZK-STARK notes |
 | 4 | **The on-ramp** (public deposit) | shared canonical pool's anonymity set, time-separated |
@@ -93,7 +93,7 @@ Not a mixer. STRK20 screens every deposit against sanctions lists before a proof
 
 Building in public, daily. Honest state:
 
-**The live demo does not move money yet.** It maps an MCP request through an ephemeral worker and Tor egress, and says so on the page. The payment path below is proven by script on Sepolia, not yet wired to the demo.
+**The active local server does not move money yet.** It maps MCP browse requests through stateless Tor-routed HTTP fetches. The payment path below is proven by script on Sepolia, not wired to the local server.
 
 - [x] Feasibility spikes — toolchain, SDK, hosted infra all verified ([`docs/SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md))
 - [x] Responsive Web2 demo with an honest, local-only route preview
