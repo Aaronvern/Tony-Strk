@@ -90,7 +90,7 @@ A user can be identified through **five independent channels**. You're only as p
 
 **What we don't claim:** that deposits are invisible, that a payee can't see an amount, or that logged-in browsing is anonymous. Overclaiming is how a privacy project gets taken apart in Q&A — please keep this discipline in anything you write.
 
-Full detail: [`PRIVACY-STACK.md`](PRIVACY-STACK.md). Adversaries and the hard questions: [`THREAT-MODEL.md`](THREAT-MODEL.md).
+Current guarantees and residual risks: [`PRIVACY-STACK.md`](PRIVACY-STACK.md). Current architecture: [`local-mcp-hardening-design.md`](superpowers/specs/2026-08-21-local-mcp-hardening-design.md). The older [`THREAT-MODEL.md`](THREAT-MODEL.md) is archived with the superseded remote-browser proposal.
 
 ### Not a mixer
 
@@ -193,9 +193,10 @@ Now that the money path works, the payment layer is a **real dependency you can 
 
 | Doc | What's in it |
 |---|---|
-| [`PLAN.md`](PLAN.md) | product, architecture, scope, schedule |
-| [`PRIVACY-STACK.md`](PRIVACY-STACK.md) | how it's private — the five channels in depth |
-| [`THREAT-MODEL.md`](THREAT-MODEL.md) | adversaries, precise claims, judge Q&A |
+| [`local-mcp-hardening-design.md`](superpowers/specs/2026-08-21-local-mcp-hardening-design.md) | current local architecture and security boundaries |
+| [`PRIVACY-STACK.md`](PRIVACY-STACK.md) | current guarantees, planned layers, and residual leaks |
+| [`PLAN.md`](PLAN.md) | archived remote MCP + Obscura proposal — superseded |
+| [`THREAT-MODEL.md`](THREAT-MODEL.md) | archived threat model for the superseded proposal |
 | [`SPIKE-RESULTS.md`](SPIKE-RESULTS.md) | what we verified first-hand, with evidence |
 | [`BUILD-STEPS.md`](BUILD-STEPS.md) | step-by-step task list |
 | [`READING-LIST.md`](READING-LIST.md) | annotated background reading |

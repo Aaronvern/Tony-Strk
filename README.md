@@ -67,7 +67,7 @@ A user can be traced through **five independent channels**. You're only as priva
 
 **What the active server claims:** a public destination sees Tor egress rather than the host IP, and browsing state is not persisted by the app. It does not promise a fresh Tor circuit per request, browser-fingerprint uniformity, operator blinding, or anonymous logged-in browsing.
 
-**What we don't claim:** that deposits/withdrawals are invisible on-chain, that a payee can't see an amount, or that logged-in browsing is anonymous. Full detail, including the residual risks, in [`docs/THREAT-MODEL.md`](docs/THREAT-MODEL.md).
+**What we don't claim:** that deposits/withdrawals are invisible on-chain, that a payee can't see an amount, or that logged-in browsing is anonymous. Current guarantees and residual risks are in [`docs/PRIVACY-STACK.md`](docs/PRIVACY-STACK.md).
 
 ### Private by default, compliant by design
 
@@ -182,9 +182,10 @@ npm run verify:mcp
 | Doc | What's in it |
 |---|---|
 | [`START-HERE.md`](docs/START-HERE.md) | ⭐ onboarding — read this first |
-| [`PLAN.md`](docs/PLAN.md) | the product, architecture, scope, schedule |
-| [`PRIVACY-STACK.md`](docs/PRIVACY-STACK.md) | how it's private — the five channels, in depth |
-| [`THREAT-MODEL.md`](docs/THREAT-MODEL.md) | adversaries, precise claims, the hard questions answered |
+| [`local-mcp-hardening-design.md`](docs/superpowers/specs/2026-08-21-local-mcp-hardening-design.md) | current local architecture and security boundaries |
+| [`PRIVACY-STACK.md`](docs/PRIVACY-STACK.md) | current guarantees, planned layers, and residual leaks |
+| [`PLAN.md`](docs/PLAN.md) | archived remote MCP + Obscura proposal — superseded |
+| [`THREAT-MODEL.md`](docs/THREAT-MODEL.md) | archived threat model for the superseded proposal |
 | [`SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md) | what we verified first-hand, with evidence |
 | [`BUILD-STEPS.md`](docs/BUILD-STEPS.md) | step-by-step build guide |
 | [`READING-LIST.md`](docs/READING-LIST.md) | annotated background reading |

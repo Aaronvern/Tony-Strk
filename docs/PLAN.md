@@ -1,9 +1,15 @@
 # Tony Stark — Product Plan
 
+> **Archived / superseded (2026-08-21).** This document records the earlier
+> remote MCP + Obscura proposal. It is not the current architecture or roadmap.
+> See the [README](../README.md) and
+> [Local MCP hardening design](superpowers/specs/2026-08-21-local-mcp-hardening-design.md)
+> for the active loopback-only Tor HTTP fetcher.
+
 > An anonymous browsing-and-paying agent, exposed as a remote MCP server, built on Starknet's STRK20 privacy stack.
 > **"The web sees the suit. Nobody sees the man inside."**
 
-Status: **planning + feasibility spike complete.** This doc is the source of truth for scope and sequencing.
+Status: **historical planning artifact; superseded.**
 Last updated: 2026-08-14.
 
 ---
