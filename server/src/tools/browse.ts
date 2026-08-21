@@ -59,6 +59,7 @@ export async function browse(
     });
     const location = response.headers.get("location");
     if (!location || response.status < 300 || response.status >= 400) break;
+    await response.body?.cancel().catch(() => {});
     if (redirects >= MAX_REDIRECTS) throw new Error("Too many redirects.");
     ({ url, address } = await assertPublicHttpUrl(new URL(location, url).toString()));
   }
@@ -80,7 +81,10 @@ export async function browse(
 
 async function readBody(response: Response): Promise<string> {
   const contentLength = Number(response.headers.get("content-length"));
-  if (contentLength > MAX_BODY_BYTES) throw new Error("Response body exceeds 1 MiB.");
+  if (contentLength > MAX_BODY_BYTES) {
+    await response.body?.cancel().catch(() => {});
+    throw new Error("Response body exceeds 1 MiB.");
+  }
   if (!response.body) return "";
 
   const reader = response.body.getReader();

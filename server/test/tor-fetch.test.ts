@@ -168,3 +168,31 @@ test("torFetch connects SOCKS to the vetted address instead of the hostname", as
   assert.equal(await response.text(), "bound");
   assert.deepEqual(seen, [`127.0.0.1:${originPort}`]);
 });
+
+test("torFetch bounds agents created for attacker-selected addresses", async (t) => {
+  const origin = http.createServer((_req, res) => res.end("bounded"));
+  t.after(() => new Promise((r) => origin.close(r)));
+  const originPort = await listen(origin);
+
+  const seen: string[] = [];
+  const socks = startSocks5(seen);
+  t.after(() => new Promise((r) => socks.close(r)));
+  const socksPort = await listen(socks);
+
+  const torFetch = createTorFetch();
+  t.after(() => torFetch.close());
+  const proxy = `socks5://127.0.0.1:${socksPort}`;
+  const target = `http://cache.test:${originPort}/`;
+
+  const addresses = Array.from({ length: 33 }, (_, i) =>
+    [..."localhost"].map((letter, bit) => i & (1 << bit) ? letter.toUpperCase() : letter).join("")
+  );
+  for (const address of addresses) {
+    const response = await torFetch(target, { proxy, address });
+    assert.equal(await response.text(), "bounded");
+  }
+  const response = await torFetch(target, { proxy, address: addresses[0] });
+  assert.equal(await response.text(), "bounded");
+
+  assert.equal(seen.length, 34, "the oldest address-specific agent must be evicted");
+});

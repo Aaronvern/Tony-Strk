@@ -42,7 +42,11 @@ function isPublicAddress(address: string): boolean {
 
   const value = ipv6ToBigInt(address);
   if (value === null) return false;
-  if ((value >> 32n) === 0xffffn) return isPublicIpv4(ipv4FromBigInt(value));
+  if (
+    (value >> 32n) === 0xffffn ||
+    inCidr(value, 0x64ff9bn << 96n, 96) ||
+    inCidr(value, 0xffffn << 48n, 96)
+  ) return isPublicIpv4(ipv4FromBigInt(value));
 
   return !inCidr(value, 0n, 128) &&
     !inCidr(value, 1n, 128) &&

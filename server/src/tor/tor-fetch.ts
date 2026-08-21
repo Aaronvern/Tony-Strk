@@ -1,6 +1,8 @@
 import { Agent, buildConnector, fetch as undiciFetch } from "undici";
 import { SocksClient } from "socks";
 
+const MAX_AGENTS = 32;
+
 /**
  * A fetch that goes through a SOCKS5 proxy.
  *
@@ -28,6 +30,12 @@ export function createTorFetch() {
     const key = `${proxy}\0${destination}`;
     let agent = agents.get(key);
     if (!agent) {
+      if (agents.size >= MAX_AGENTS) {
+        const oldestKey = agents.keys().next().value!;
+        const oldest = agents.get(oldestKey)!;
+        agents.delete(oldestKey);
+        void oldest.close().catch(() => {});
+      }
       agent = buildSocksAgent(proxy, destination);
       agents.set(key, agent);
     }
