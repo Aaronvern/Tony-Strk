@@ -1,8 +1,17 @@
 # PaywallAnonymizer
 
-> ⚠️ **Reviewed in-repo against the pool source, not externally audited.**
-> An anonymizer contract is the application team's code to own. Route it
-> through an audit before it holds anyone else's money.
+> ⚠️ **Reviewed in-repo and exercised against the live Sepolia pool, but not
+> externally audited.** An anonymizer contract is the application team's code
+> to own. Route it through an audit before it holds anyone else's money.
+>
+> Deployed on Sepolia at
+> `0x767a1daf3503e51882e88f6d4f1ef510517895ed0c91f8847bbf85eb9d389d`.
+> A real payment settled in tx
+> [`0x94c9a566…82cf5`](https://sepolia.voyager.online/tx/0x94c9a56632651bff50ae2e5096394de0c96e1f405900d1c82e1a27e5882cf5):
+> the pool withdrew 0.1 STRK to the helper, the merchant received exactly
+> 0.05, `PaywallPaid` was emitted on the resource hash, the 0.05 change was
+> approved and pulled into an open note, and the helper was left holding
+> nothing.
 
 A STRK20 anonymizer (helper) contract that lets an agent satisfy a paywall
 without identifying itself.
@@ -124,14 +133,16 @@ to try to spend the funding twice.
 
 ## Before this goes near mainnet
 
-- [ ] **Confirm the screening policy for this contract's address.** The pool's
-      default `OpenNoteScreeningPolicy` is `Required`, and under it a helper
-      that returns deposits makes *its own address* the transaction's screening
-      subject — which then needs a screener attestation, and collides with any
-      other screening subject in the same transaction
-      (`MULTIPLE_SCREENING_SUBJECTS`). Only the pool's **app governor** can set
-      a helper to `Exempt` or `Delegated`. The `None` path returns no deposits
-      and is not affected.
+- [x] ~~Confirm the screening policy for this contract's address.~~ **Settled
+      2026-08-22: it does not apply to either live pool.** Upstream, the default
+      `OpenNoteScreeningPolicy` is `Required`, and under it a helper returning
+      deposits would make its own address the transaction's screening subject,
+      needing a screener attestation only the app governor could waive. But
+      `get_open_note_screening_policy` does not exist on the deployed Sepolia
+      pool (class `0x56ab118a…`) or the deployed mainnet pool (class
+      `0x67dddd89…`) — the feature is in the source, not in either deployment.
+      A real Sepolia payment settled with `screening: None` and a non-empty
+      deposit span. Re-check when the pools upgrade.
 - [ ] External audit
 - [ ] Test against the real pool on Sepolia, not just mocks
 - [ ] Confirm calldata ordering matches what the dapp sends via the Wallet API

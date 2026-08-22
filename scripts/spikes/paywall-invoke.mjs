@@ -48,10 +48,31 @@ const DEPOSIT = depositArg > -1 ? BigInt(process.argv[depositArg + 1]) * 10n ** 
 
 if (!PK) { console.error("set ACCOUNT_PRIVATE_KEY (testnet only)"); process.exit(1); }
 if (!HELPER) { console.error("set HELPER_ADDRESS (deploy the helper first)"); process.exit(1); }
+const FUNDING_TX = process.env.FUNDING_TX; // optional: assert its notes have matured
 
 const node = new RpcProvider({ nodeUrl: RPC });
 const provingBlock = (await node.getBlockNumber()) - 12;
 console.log(`proving against block ${provingBlock} (latest - 12)`);
+
+/**
+ * Note maturity. The proof is built against `latest - 12`, but a dry run
+ * simulates against live state — so a note created in the last 12 blocks makes
+ * the dry run pass and the real submission revert with NOTE_NOT_FOUND, raised
+ * by `use_note` inside the prover's virtual block. It reads like a missing
+ * note and is a timing problem. Cost an hour once; worth the check.
+ */
+async function assertNotesAreMature(txHash) {
+  if (!txHash) return;
+  const receipt = await node.getTransactionReceipt(txHash);
+  const landed = receipt.block_number;
+  if (landed > provingBlock) {
+    const wait = landed - provingBlock;
+    console.log(`\n⚠️  the funding tx landed in block ${landed}, ${wait} block(s) after the`);
+    console.log(`   proving block ${provingBlock}. Its notes do not exist in the proving`);
+    console.log(`   state yet — wait ~${Math.ceil((wait * 30) / 60)} min and re-run.`);
+    process.exit(1);
+  }
+}
 
 let registry = undefined;
 const storage = {
@@ -106,6 +127,7 @@ if (DEPOSIT > 0n) {
   console.log(`  voyager    https://sepolia.voyager.online/tx/${dep.transaction_hash}`);
   await node.waitForTransaction(dep.transaction_hash);
   console.log("  shielded ✅\n");
+  await assertNotesAreMature(dep.transaction_hash);
 }
 
 // The three legs. Calldata order must match `privacy_invoke`'s signature:
@@ -121,6 +143,8 @@ const actions = [
     calldata: [MERCHANT, STRK, num.toHex(PRICE), RESOURCE_HASH, "0x0", "${openNoteIds[0]}"],
   },
 ];
+
+await assertNotesAreMature(FUNDING_TX);
 
 const merchantBefore = await balanceOf(MERCHANT);
 

@@ -27,6 +27,9 @@ Explorer URL shapes:
 
 | 2026-08-22 | Shield 3 STRK to fund the anonymizer spike | `0x7969781d086182f1a8c6c1a2d43e96073825936462473bd6aa212479b4e2a5f` | [view](https://sepolia.voyager.online/tx/0x7969781d086182f1a8c6c1a2d43e96073825936462473bd6aa212479b4e2a5f) | [view](https://sepolia.starkscan.co/tx/0x7969781d086182f1a8c6c1a2d43e96073825936462473bd6aa212479b4e2a5f) |
 
+| 2026-08-22 | **Paywall payment through the pool** — `privacy_invoke` paid the merchant 0.05 STRK, change to an open note, receipt emitted | `0x94c9a56632651bff50ae2e5096394de0c96e1f405900d1c82e1a27e5882cf5` | [view](https://sepolia.voyager.online/tx/0x94c9a56632651bff50ae2e5096394de0c96e1f405900d1c82e1a27e5882cf5) | [view](https://sepolia.starkscan.co/tx/0x94c9a56632651bff50ae2e5096394de0c96e1f405900d1c82e1a27e5882cf5) |
+| 2026-08-22 | Shield 10 STRK (funded the payment above) | `0xd005d4d9ed0f0f0f9a92f9231ae4ed1c88e03d24333c370a404ecce618a7ec` | [view](https://sepolia.voyager.online/tx/0xd005d4d9ed0f0f0f9a92f9231ae4ed1c88e03d24333c370a404ecce618a7ec) | [view](https://sepolia.starkscan.co/tx/0xd005d4d9ed0f0f0f9a92f9231ae4ed1c88e03d24333c370a404ecce618a7ec) |
+
 ## Mainnet
 
 _None yet. Three pool transactions are required to be scored._
