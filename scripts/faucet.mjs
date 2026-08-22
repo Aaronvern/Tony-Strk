@@ -54,7 +54,10 @@ console.log(`Funding ${userAddress}\n`);
 
 // 1 — challenge
 const ch = await api("/api/public-agent/pow/challenge", { userAddress });
-const { challengeId, powInputPrefix, difficulty } = ch.data ?? ch;
+// The challenge is bound to the address as the faucet normalized it (lowercase).
+// Submitting the original mixed-case string fails with POW_CHALLENGE_INVALID,
+// which reads like a bad nonce but is an address-casing mismatch.
+const { challengeId, powInputPrefix, difficulty, userAddress: boundAddress } = ch.data ?? ch;
 console.log(`① challenge   id=${challengeId}  difficulty=${difficulty} bits`);
 
 // 2 — solve locally
@@ -64,7 +67,7 @@ console.log(`              sha256=${sol.hash.slice(0, 24)}…`);
 
 // 3 — submit
 const req = await api("/api/public-agent/faucet/request", {
-  userAddress,
+  userAddress: boundAddress ?? userAddress,
   challengeId,
   nonce: sol.nonce,
 });

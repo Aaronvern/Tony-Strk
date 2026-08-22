@@ -26,9 +26,21 @@ opaque `resource_hash`, and returns the change to an open note. The merchant
 can match a payment to an entitlement and grant access. It never learns who
 bought it.
 
-It also matters for a second reason: `privacy_invoke` runs **on-chain**, so
-this path needs no proving service. The hosted mainnet prover URL is still
-unpublished, which is what blocks the SDK route.
+### It does not remove the need for a prover
+
+An earlier draft of this file claimed that because `privacy_invoke` runs
+on-chain, this path needs no proving service. That is wrong. `apply_actions` is
+the only entry point that applies server actions and it calls `validate_proof`
+unconditionally, which asserts the transaction carries `proof_facts`. There is
+no proof-free way into the pool. The client-side pass
+(`_client_apply_actions`) explicitly no-ops `Invoke`, so the helper is not even
+simulated during proving — its effects land on-chain at settlement, which is
+why note amounts are measured at execution time.
+
+What that means in practice: a helper call still has to be proven and submitted
+by something holding the spending key — the hosted prover (whose mainnet URL is
+still unpublished) or a wallet that proves for itself, which today means Ready
+via the Starknet Wallet API.
 
 ## Interface
 
