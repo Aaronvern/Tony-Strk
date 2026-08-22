@@ -179,6 +179,8 @@ npm run verify:mcp
 
 **New here? Read [`docs/START-HERE.md`](docs/START-HERE.md)** — the product, the technical core, current state, and how to get running, in about ten minutes.
 
+Read [`docs/LOCAL_MCP_WORK.md`](docs/LOCAL_MCP_WORK.md) for a plain English record of the local MCP work and its limits.
+
 | Doc | What's in it |
 |---|---|
 | [`START-HERE.md`](docs/START-HERE.md) | ⭐ onboarding — read this first |
