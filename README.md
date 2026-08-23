@@ -172,7 +172,15 @@ Read [`docs/LOCAL_MCP_WORK.md`](docs/LOCAL_MCP_WORK.md) for the full local setup
 
 ### Prepare Automatic Payments
 
-Run this command once on macOS.
+Run this command once on macOS. It creates the wallet and saves the AVNU key in the macOS Keychain.
+
+```bash
+npm run wallet:setup
+```
+
+The script asks for the AVNU key only if it is not already in Keychain.
+
+You can also run the two setup steps separately.
 
 ```bash
 npm run wallet:create
@@ -201,6 +209,7 @@ Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to
 | `scripts/deploy-account.mjs` | deploys a counterfactual Ready/Argent account |
 | `scripts/create-sepolia-wallet.mjs` | creates the Keychain-backed local Sepolia wallet |
 | `scripts/set-avnu-key.mjs` | saves the AVNU paymaster key in the macOS Keychain |
+| `scripts/setup-local-wallet.sh` | runs the local wallet and paymaster setup |
 
 No `.env` is required for the local wallet. The gitignored root `.env` can hold non-secret network settings. **Use testnet funds only.**
 

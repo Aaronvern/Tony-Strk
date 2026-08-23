@@ -86,7 +86,7 @@ The `browse` tool is active after the server starts. The `pay` tool reports the 
 
 ## Prepare the Local Wallet
 
-1. Run `npm run wallet:create` on macOS.
+1. Run `npm run wallet:setup` on macOS.
 
 2. Fund the printed Sepolia address with test STRK.
 
