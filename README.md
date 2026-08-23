@@ -144,6 +144,32 @@ npm run spike:services    # verify every external dependency is live
 npm run spike:wallet      # drive the STRK20 wallet API headlessly
 ```
 
+## Connect an AI Agent
+
+Start Tor and the local server before you add an MCP client.
+
+```bash
+TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server
+```
+
+Add the local server to Codex.
+
+```bash
+codex mcp add tony-strk --url http://127.0.0.1:8787/mcp
+```
+
+Add the local server to Claude Code.
+
+```bash
+claude mcp add --scope user --transport http tony-strk http://127.0.0.1:8787/mcp
+```
+
+Both clients use the same loopback-only server. No API key is required.
+
+The `browse` tool is available after the server starts. The `pay` tool stays disabled by default.
+
+Read [`docs/LOCAL_MCP_WORK.md`](docs/LOCAL_MCP_WORK.md) for the full local setup and limits.
+
 Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to 10.0.2, which predates the STRK20 API.
 
 ### Scripts

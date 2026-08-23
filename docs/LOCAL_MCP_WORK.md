@@ -58,6 +58,30 @@ npm run verify:mcp
 
 The result must include `"IsTor":true`.
 
+## Connect Codex or Claude Code
+
+Start Tor and the local server before you add an MCP client.
+
+```sh
+TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server
+```
+
+Add the server to Codex.
+
+```sh
+codex mcp add tony-strk --url http://127.0.0.1:8787/mcp
+```
+
+Add the server to Claude Code.
+
+```sh
+claude mcp add --scope user --transport http tony-strk http://127.0.0.1:8787/mcp
+```
+
+Both clients connect to the same local endpoint. No API key is required.
+
+The `browse` tool is active after the server starts. The `pay` tool stays disabled unless you add local payment values.
+
 ## Do the Checks
 
 1. Run `npm test`. The web package has four tests. The server package has 31 tests.
