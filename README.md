@@ -184,6 +184,8 @@ Then call `wallet_status` through Codex or Claude Code. When it reports `needs_d
 
 The private key and privacy passphrase stay in the macOS Keychain. The MCP client never receives them.
 
+Set `AVNU_API_KEY` in the gitignored `.env` before payment. Get this key from [AVNU](https://portal.avnu.fi).
+
 After `wallet_status` reports `ready`, the local agent can call `pay` automatically.
 
 Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to 10.0.2, which predates the STRK20 API.

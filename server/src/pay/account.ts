@@ -18,6 +18,7 @@ export type WalletState =
   | "needs_creation"
   | "needs_funding"
   | "needs_deployment"
+  | "needs_paymaster"
   | "ready";
 
 export function createCounterfactualAccount(
@@ -44,8 +45,9 @@ export function determineWalletState(
   hasSecret: boolean,
   deployed: boolean,
   balanceWei: bigint,
+  hasPaymaster: boolean,
 ): WalletState {
   if (!hasSecret) return "needs_creation";
-  if (deployed) return "ready";
-  return balanceWei > 0n ? "needs_deployment" : "needs_funding";
+  if (!deployed) return balanceWei > 0n ? "needs_deployment" : "needs_funding";
+  return hasPaymaster ? "ready" : "needs_paymaster";
 }

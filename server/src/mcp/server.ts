@@ -67,7 +67,7 @@ export function createServer(deps: ServerDeps): McpServer {
         title: "Show local wallet status",
         description:
           "Use this before a payment. It reports whether the local Sepolia " +
-          "wallet needs creation, funding, deployment, or is ready.",
+          "wallet needs creation, funding, deployment, a paymaster key, or is ready.",
         inputSchema: {},
       },
       async () => {

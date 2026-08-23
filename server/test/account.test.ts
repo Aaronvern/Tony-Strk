@@ -21,8 +21,9 @@ test("a private key derives the Ready counterfactual account address", () => {
 });
 
 test("wallet state tells the agent when funding or deployment is required", () => {
-  assert.equal(determineWalletState(false, false, 0n), "needs_creation");
-  assert.equal(determineWalletState(true, false, 0n), "needs_funding");
-  assert.equal(determineWalletState(true, false, 1n), "needs_deployment");
-  assert.equal(determineWalletState(true, true, 0n), "ready");
+  assert.equal(determineWalletState(false, false, 0n, false), "needs_creation");
+  assert.equal(determineWalletState(true, false, 0n, false), "needs_funding");
+  assert.equal(determineWalletState(true, false, 1n, false), "needs_deployment");
+  assert.equal(determineWalletState(true, true, 0n, false), "needs_paymaster");
+  assert.equal(determineWalletState(true, true, 0n, true), "ready");
 });

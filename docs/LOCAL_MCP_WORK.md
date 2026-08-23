@@ -94,7 +94,9 @@ The `browse` tool is active after the server starts. The `pay` tool reports the 
 
 4. When the state is `needs_deployment`, call `wallet_deploy`.
 
-5. When the state is `ready`, the agent can call `pay` automatically.
+5. When the state is `needs_paymaster`, set `AVNU_API_KEY` in `.env`.
+
+6. When the state is `ready`, the agent can call `pay` automatically.
 
 The macOS Keychain stores the private key and privacy passphrase. The MCP tools return only public values.
 

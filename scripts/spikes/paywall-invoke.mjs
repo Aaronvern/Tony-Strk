@@ -20,6 +20,8 @@
 import { RpcProvider, Signer, constants, hash, num } from "starknet";
 import { IndexerDiscoveryProvider, ProvingServiceProofProvider } from "@starkware-libs/starknet-privacy-sdk";
 import { CorePrivateTransfersProver, AvnuPaymaster, SdkWallet } from "@starkware-libs/starknet-privacy-client";
+import { createKeychainStore } from "../../server/src/pay/keychain.ts";
+import { createCounterfactualAccount } from "../../server/src/pay/account.ts";
 
 const RPC = process.env.STARKNET_RPC_URL ?? "https://starknet-sepolia.drpc.org";
 const PROVING_URL = process.env.PROVING_SERVICE_URL ?? "https://transaction-prover.alpha-sepolia.sw-dev.io";
@@ -28,9 +30,15 @@ const PAYMASTER_URL = process.env.PAYMASTER_URL ?? "https://sepolia.paymaster.av
 const API_KEY = process.env.AVNU_API_KEY;
 const POOL = process.env.POOL_ADDRESS ?? "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
 const STRK = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-const ADDRESS = process.env.ACCOUNT_ADDRESS ?? "0x077F1679D6B758f63b33Ac3eba46c33b0218185156efc9041cB4ba1A2162FC87";
-const PK = process.env.ACCOUNT_PRIVATE_KEY;
-const PASSPHRASE = process.env.PRIVACY_PASSPHRASE ?? "tony-stark-sepolia-dev";
+const keychain = process.env.ACCOUNT_PRIVATE_KEY
+  ? null
+  : await createKeychainStore().load();
+const account = keychain
+  ? createCounterfactualAccount(keychain.privateKey, keychain.passphrase)
+  : null;
+const ADDRESS = process.env.ACCOUNT_ADDRESS ?? account?.address;
+const PK = process.env.ACCOUNT_PRIVATE_KEY ?? keychain?.privateKey;
+const PASSPHRASE = process.env.PRIVACY_PASSPHRASE ?? keychain?.passphrase ?? "tony-stark-sepolia-dev";
 const HELPER = process.env.HELPER_ADDRESS;
 
 // A stand-in merchant. Any felt is a valid ERC-20 balance key, so it does not
@@ -46,8 +54,9 @@ const FUNDING = BigInt(process.env.SPIKE_FUNDING_WEI ?? 1n * 10n ** 17n); // 0.1
 const depositArg = process.argv.indexOf("--deposit");
 const DEPOSIT = depositArg > -1 ? BigInt(process.argv[depositArg + 1]) * 10n ** 18n : 0n;
 
-if (!PK) { console.error("set ACCOUNT_PRIVATE_KEY (testnet only)"); process.exit(1); }
+if (!PK || !ADDRESS) { console.error("create the macOS Keychain wallet or set ACCOUNT_PRIVATE_KEY and ACCOUNT_ADDRESS"); process.exit(1); }
 if (!HELPER) { console.error("set HELPER_ADDRESS (deploy the helper first)"); process.exit(1); }
+if (!API_KEY) { console.error("set AVNU_API_KEY before a private payment"); process.exit(1); }
 const FUNDING_TX = process.env.FUNDING_TX; // optional: assert its notes have matured
 
 const node = new RpcProvider({ nodeUrl: RPC });
@@ -61,9 +70,8 @@ console.log(`proving against block ${provingBlock} (latest - 12)`);
  * by `use_note` inside the prover's virtual block. It reads like a missing
  * note and is a timing problem. Cost an hour once; worth the check.
  */
-async function assertNotesAreMature(txHash) {
-  if (!txHash) return;
-  const receipt = await node.getTransactionReceipt(txHash);
+async function assertNotesAreMature(receipt) {
+  if (!receipt) return;
   const landed = receipt.block_number;
   if (landed > provingBlock) {
     const wait = landed - provingBlock;
@@ -125,9 +133,9 @@ if (DEPOSIT > 0n) {
   ]);
   console.log(`  deposit tx ${dep.transaction_hash}`);
   console.log(`  voyager    https://sepolia.voyager.online/tx/${dep.transaction_hash}`);
-  await node.waitForTransaction(dep.transaction_hash);
+  const depositReceipt = await node.waitForTransaction(dep.transaction_hash);
   console.log("  shielded ✅\n");
-  await assertNotesAreMature(dep.transaction_hash);
+  await assertNotesAreMature(depositReceipt);
 }
 
 // The three legs. Calldata order must match `privacy_invoke`'s signature:
@@ -144,7 +152,7 @@ const actions = [
   },
 ];
 
-await assertNotesAreMature(FUNDING_TX);
+if (FUNDING_TX) await assertNotesAreMature(await node.waitForTransaction(FUNDING_TX));
 
 const merchantBefore = await balanceOf(MERCHANT);
 

@@ -50,7 +50,12 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
   async function status(): Promise<WalletStatus> {
     const state = await accountState();
     return {
-      state: determineWalletState(Boolean(state.secret), state.deployed, state.balanceWei),
+      state: determineWalletState(
+        Boolean(state.secret),
+        state.deployed,
+        state.balanceWei,
+        Boolean(options.avnuApiKey),
+      ),
       ...(state.account ? { address: state.account.address, balanceWei: state.balanceWei.toString() } : {}),
     };
   }
@@ -92,7 +97,12 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
     },
     async getPayWallet() {
       const current = await accountState();
-      const state = determineWalletState(Boolean(current.secret), current.deployed, current.balanceWei);
+      const state = determineWalletState(
+        Boolean(current.secret),
+        current.deployed,
+        current.balanceWei,
+        Boolean(options.avnuApiKey),
+      );
       if (state !== "ready" || !current.secret || !current.account) {
         throw new Error(`Wallet ${state}. Call wallet_status for the required action.`);
       }
