@@ -4,7 +4,13 @@ import { z } from "zod";
 import { browse, type BrowseDeps } from "../tools/browse.ts";
 import { pay, type PayDeps } from "../pay/pay.ts";
 
-export type ServerDeps = BrowseDeps & { pay?: PayDeps };
+interface WalletToolDeps {
+  status(): Promise<Record<string, unknown>>;
+  create(): Promise<Record<string, unknown>>;
+  deploy(): Promise<Record<string, unknown>>;
+}
+
+export type ServerDeps = BrowseDeps & { pay?: PayDeps; wallet?: WalletToolDeps };
 
 /**
  * Build the Tony Strk MCP server.
@@ -54,6 +60,62 @@ export function createServer(deps: ServerDeps): McpServer {
     },
   );
 
+  if (deps.wallet) {
+    server.registerTool(
+      "wallet_status",
+      {
+        title: "Show local wallet status",
+        description:
+          "Use this before a payment. It reports whether the local Sepolia " +
+          "wallet needs creation, funding, deployment, or is ready.",
+        inputSchema: {},
+      },
+      async () => {
+        const result = await deps.wallet!.status();
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          structuredContent: result,
+        };
+      },
+    );
+
+    server.registerTool(
+      "wallet_create",
+      {
+        title: "Create the local Sepolia wallet",
+        description:
+          "Create a fresh Starknet keypair in the macOS Keychain. Return the " +
+          "public counterfactual address that the user must fund.",
+        inputSchema: {},
+      },
+      async () => {
+        const result = await deps.wallet!.create();
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          structuredContent: result,
+        };
+      },
+    );
+
+    server.registerTool(
+      "wallet_deploy",
+      {
+        title: "Deploy the funded local wallet",
+        description:
+          "Deploy the local Sepolia account after the user funds its public " +
+          "address. This sends a deployment transaction but does not pay anyone.",
+        inputSchema: {},
+      },
+      async () => {
+        const result = await deps.wallet!.deploy();
+        return {
+          content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          structuredContent: result,
+        };
+      },
+    );
+  }
+
   if (deps.pay) {
     server.registerTool(
       "pay",
@@ -62,8 +124,8 @@ export function createServer(deps: ServerDeps): McpServer {
         description:
           "Pay a Starknet address out of the shielded STRK20 pool. The payee " +
           "sees an amount arrive but cannot tell which depositor sent it. The " +
-          "amount itself is visible on-chain. Requires a self-hosted instance " +
-          "holding a spending key.",
+          "amount itself is visible on-chain. Use wallet_status first. The " +
+          "local macOS Keychain holds the spending key.",
         inputSchema: {
           to: z.string().describe("Recipient Starknet address, 0x-prefixed."),
           amount: z

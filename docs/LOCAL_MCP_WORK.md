@@ -22,11 +22,13 @@ The server is local only. This work did not deploy a contract or send a payment 
 
 7. The tool limits a response to 1 MiB and stops after five redirects.
 
-8. The `pay` tool stays hidden unless `PAY_ENABLED=true` and wallet values are present.
+8. The local wallet saves its private key and passphrase in the macOS Keychain.
 
-9. The old Obscura service is not part of the active server path.
+9. The `wallet_status` tool tells the agent when it must create, fund, or deploy the local wallet.
 
-10. The Railway deployment file was removed. The container uses loopback only.
+10. The old Obscura service is not part of the active server path.
+
+11. The Railway deployment file was removed. The container uses loopback only.
 
 ## What Does Not Work Yet
 
@@ -80,7 +82,21 @@ claude mcp add --scope user --transport http tony-strk http://127.0.0.1:8787/mcp
 
 Both clients connect to the same local endpoint. No API key is required.
 
-The `browse` tool is active after the server starts. The `pay` tool stays disabled unless you add local payment values.
+The `browse` tool is active after the server starts. The `pay` tool reports the next wallet step until the wallet is ready.
+
+## Prepare the Local Wallet
+
+1. Run `npm run wallet:create` on macOS.
+
+2. Fund the printed Sepolia address with test STRK.
+
+3. Call `wallet_status` from Codex or Claude Code.
+
+4. When the state is `needs_deployment`, call `wallet_deploy`.
+
+5. When the state is `ready`, the agent can call `pay` automatically.
+
+The macOS Keychain stores the private key and privacy passphrase. The MCP tools return only public values.
 
 ## Do the Checks
 

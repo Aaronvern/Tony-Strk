@@ -9,7 +9,9 @@ export interface PayWallet {
 
 export interface PayDeps {
   /** Null when the server holds no spending key, which is the hosted default. */
-  wallet: PayWallet | null;
+  wallet?: PayWallet | null;
+  /** Load the local wallet at call time after the agent has prepared it. */
+  getWallet?: () => Promise<PayWallet | null>;
   token: string;
   explorerBase: string;
 }
@@ -59,15 +61,16 @@ export async function pay(
   const recipient = assertAddress(input.to);
   const amountWei = toWei(input.amount);
 
-  if (!deps.wallet) {
+  const wallet = deps.getWallet ? await deps.getWallet() : deps.wallet;
+
+  if (!wallet) {
     throw new Error(
-      "Refusing to pay: this server holds no spending key. Paying requires a " +
-        "self-hosted instance configured with ACCOUNT_PRIVATE_KEY, so that the " +
-        "key stays with whoever owns the funds.",
+      "Refusing to pay: no spending key is available locally. Call wallet_status " +
+        "to create, fund, and deploy the local wallet.",
     );
   }
 
-  const { transaction_hash } = await deps.wallet.strk20InvokeTransaction([
+  const { transaction_hash } = await wallet.strk20InvokeTransaction([
     {
       type: "withdraw",
       token: deps.token,

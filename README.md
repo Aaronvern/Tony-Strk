@@ -10,7 +10,7 @@ URLs through Tor for any MCP client (Claude, Cursor, …).
 > The web sees the suit. Nobody sees the man inside.
 
 1. **Browse** — a Tor-routed HTTP fetcher. Sites see an exit relay, not your IP or your device.
-2. **Pay** — an experimental, disabled-by-default path for shielded STRK20 testnet payments. The current local process holds any key you configure.
+2. **Pay** — an experimental STRK20 testnet path. The local process keeps its key in the macOS Keychain.
 
 You need both. An agent that browses anonymously and then pays from a wallet with a public history has just leaked everything it spent the last ten minutes protecting.
 
@@ -49,7 +49,7 @@ The active server makes public, logged-out HTTP fetching private from the destin
 
 **What works now:** the agent asks to browse → the loopback-only server validates a public URL → a stateless HTTP request goes through Tor → the site sees a Tor exit instead of the host IP → the server returns a bounded text response. There is no browser worker, persistent browsing session, or direct-network fallback.
 
-`pay` is an opt-in experimental path. It is absent unless `PAY_ENABLED=true` and wallet configuration are both present.
+`pay` is an experimental local path. It cannot spend until you create, fund, and deploy the local wallet.
 
 ---
 
@@ -93,7 +93,7 @@ Not a mixer. STRK20 screens every deposit against sanctions lists before a proof
 
 Building in public, daily. Honest state:
 
-**The active local server keeps payments disabled by default.** It exposes `pay` only when `PAY_ENABLED=true` and wallet configuration are present; browse maps MCP requests through stateless Tor-routed HTTP fetches.
+**The active local server keeps payments disabled by default.** It exposes the wallet steps first. It can pay only after the local wallet is ready.
 
 - [x] Feasibility spikes — toolchain, SDK, hosted infra all verified ([`docs/SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md))
 - [x] Responsive Web2 demo with an honest, local-only route preview
@@ -166,9 +166,25 @@ claude mcp add --scope user --transport http tony-strk http://127.0.0.1:8787/mcp
 
 Both clients use the same loopback-only server. No API key is required.
 
-The `browse` tool is available after the server starts. The `pay` tool stays disabled by default.
+The `browse` tool is available after the server starts. The `pay` tool reports the next wallet step until the wallet is ready.
 
 Read [`docs/LOCAL_MCP_WORK.md`](docs/LOCAL_MCP_WORK.md) for the full local setup and limits.
+
+### Prepare Automatic Payments
+
+Run this command once on macOS.
+
+```bash
+npm run wallet:create
+```
+
+The command prints a public Sepolia account address. Fund this address with test STRK.
+
+Then call `wallet_status` through Codex or Claude Code. When it reports `needs_deployment`, call `wallet_deploy`.
+
+The private key and privacy passphrase stay in the macOS Keychain. The MCP client never receives them.
+
+After `wallet_status` reports `ready`, the local agent can call `pay` automatically.
 
 Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to 10.0.2, which predates the STRK20 API.
 
@@ -181,8 +197,9 @@ Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to
 | `scripts/spikes/mock-wallet-spike.mjs` | proves the STRK20 wallet API works headlessly — no browser |
 | `scripts/faucet.mjs` | funds a Sepolia address (proof-of-work gated, no auth) |
 | `scripts/deploy-account.mjs` | deploys a counterfactual Ready/Argent account |
+| `scripts/create-sepolia-wallet.mjs` | creates the Keychain-backed local Sepolia wallet |
 
-No `.env` is required for the local server. If present, the gitignored root `.env` is loaded; secrets such as `ACCOUNT_PRIVATE_KEY` can also come directly from the environment. **Use testnet keys only.**
+No `.env` is required for the local wallet. The gitignored root `.env` can hold non-secret network settings. **Use testnet funds only.**
 
 ## Verify it yourself
 

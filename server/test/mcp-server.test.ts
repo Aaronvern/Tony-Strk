@@ -43,6 +43,25 @@ test("pay is only discovered when explicitly enabled", async () => {
   );
 });
 
+test("wallet tools tell an MCP client how to prepare automatic payments", async () => {
+  const client = await connect({
+    wallet: {
+      status: async () => ({ state: "needs_funding", address: "0x123" }),
+      create: async () => ({ state: "needs_funding", address: "0x123" }),
+      deploy: async () => ({ state: "ready", address: "0x123", transactionHash: "0xabc" }),
+    },
+  });
+
+  const { tools } = await client.listTools();
+  assert.deepEqual(
+    tools.map((tool) => tool.name),
+    ["browse", "wallet_status", "wallet_create", "wallet_deploy"],
+  );
+
+  const result = await client.callTool({ name: "wallet_status", arguments: {} });
+  assert.deepEqual(result.structuredContent, { state: "needs_funding", address: "0x123" });
+});
+
 test("a paywalled page tells the client that payment is required", async () => {
   const client = await connect({
     torProxy: "socks5://127.0.0.1:9050",

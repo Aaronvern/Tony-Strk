@@ -1,6 +1,7 @@
 import { createApp } from "./app.ts";
 import { createTorFetch } from "./tor/tor-fetch.ts";
-import { createWallet } from "./pay/wallet.ts";
+import { createKeychainStore } from "./pay/keychain.ts";
+import { createWalletManager } from "./pay/wallet-manager.ts";
 
 // Routes through the SOCKS circuit by replacing the connector underneath
 // undici. Node's global fetch has no SOCKS support and would silently ignore
@@ -24,9 +25,8 @@ const TOKEN =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const network = process.env.NETWORK ?? "sepolia";
 
-const wallet = await createWallet({
-  privateKey: process.env.ACCOUNT_PRIVATE_KEY,
-  address: process.env.ACCOUNT_ADDRESS,
+const wallet = createWalletManager({
+  store: createKeychainStore(),
   rpcUrl: process.env.STARKNET_RPC_URL ?? "https://starknet-sepolia.drpc.org",
   provingUrl:
     process.env.PROVING_SERVICE_URL ??
@@ -38,29 +38,23 @@ const wallet = await createWallet({
   avnuApiKey: process.env.AVNU_API_KEY,
   pool: POOL,
   token: TOKEN,
-  passphrase: process.env.PRIVACY_PASSPHRASE ?? "tony-strk-dev",
   chainId: network === "mainnet" ? "SN_MAIN" : "SN_SEPOLIA",
-  ohttpEnabled: process.env.OHTTP_ENABLED !== "false",
-  ohttpRelayUrl: process.env.OHTTP_RELAY_URL,
+  ohttpEnabled: false,
 });
 
-const payDeps =
-  process.env.PAY_ENABLED === "true" && wallet
-    ? {
-        wallet,
-        token: TOKEN,
-        explorerBase:
-          network === "mainnet"
-            ? "https://starkscan.co"
-            : "https://sepolia.starkscan.co",
-      }
-    : undefined;
+const payDeps = {
+  getWallet: () => wallet.getPayWallet(),
+  token: TOKEN,
+  explorerBase:
+    network === "mainnet" ? "https://starkscan.co" : "https://sepolia.starkscan.co",
+};
 
 const app = createApp(
   {
     torProxy: process.env.TOR_SOCKS_PROXY ?? "",
     fetchImpl: torFetch,
-    ...(payDeps ? { pay: payDeps } : {}),
+    wallet,
+    pay: payDeps,
   },
   { host, allowedHosts },
 );
@@ -68,9 +62,7 @@ const app = createApp(
 app.listen(port, host, () => {
   console.log(`Tony Strk MCP server on http://${host}:${port}/mcp`);
   console.log(
-    payDeps
-      ? "pay: enabled"
-      : "pay: disabled - set PAY_ENABLED=true and configure a spending key.",
+    "wallet: macOS Keychain. Call wallet_status before payment.",
   );
   console.log(
     process.env.TOR_SOCKS_PROXY
