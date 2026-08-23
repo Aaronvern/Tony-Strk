@@ -1,6 +1,6 @@
 import { createApp } from "./app.ts";
 import { createTorFetch } from "./tor/tor-fetch.ts";
-import { createKeychainStore } from "./pay/keychain.ts";
+import { createKeychainStore, createPaymasterKeyStore } from "./pay/keychain.ts";
 import { createWalletManager } from "./pay/wallet-manager.ts";
 
 // Routes through the SOCKS circuit by replacing the connector underneath
@@ -27,6 +27,7 @@ const network = process.env.NETWORK ?? "sepolia";
 
 const wallet = createWalletManager({
   store: createKeychainStore(),
+  paymaster: createPaymasterKeyStore(),
   rpcUrl: process.env.STARKNET_RPC_URL ?? "https://starknet-sepolia.drpc.org",
   provingUrl:
     process.env.PROVING_SERVICE_URL ??
@@ -35,7 +36,6 @@ const wallet = createWalletManager({
     process.env.INDEXER_URL ??
     "https://discovery-service.alpha-sepolia.sw-dev.io",
   paymasterUrl: process.env.PAYMASTER_URL ?? "https://sepolia.paymaster.avnu.fi",
-  avnuApiKey: process.env.AVNU_API_KEY,
   pool: POOL,
   token: TOKEN,
   chainId: network === "mainnet" ? "SN_MAIN" : "SN_SEPOLIA",

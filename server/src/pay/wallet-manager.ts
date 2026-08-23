@@ -7,7 +7,7 @@ import {
   READY_ACCOUNT_CLASS_HASH,
   type WalletState,
 } from "./account.ts";
-import type { KeychainStore } from "./keychain.ts";
+import type { KeychainStore, PaymasterKeyStore } from "./keychain.ts";
 import { createWallet, type WalletEnv } from "./wallet.ts";
 import type { PayWallet } from "./pay.ts";
 
@@ -25,8 +25,9 @@ export interface WalletManager {
   getPayWallet(): Promise<PayWallet | null>;
 }
 
-interface WalletManagerOptions extends Omit<WalletEnv, "privateKey" | "address" | "passphrase"> {
+interface WalletManagerOptions extends Omit<WalletEnv, "privateKey" | "address" | "passphrase" | "avnuApiKey"> {
   store: KeychainStore;
+  paymaster: PaymasterKeyStore;
 }
 
 export function createWalletManager(options: WalletManagerOptions): WalletManager {
@@ -48,13 +49,13 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
   }
 
   async function status(): Promise<WalletStatus> {
-    const state = await accountState();
+    const [state, paymasterKey] = await Promise.all([accountState(), options.paymaster.load()]);
     return {
       state: determineWalletState(
         Boolean(state.secret),
         state.deployed,
         state.balanceWei,
-        Boolean(options.avnuApiKey),
+        Boolean(paymasterKey),
       ),
       ...(state.account ? { address: state.account.address, balanceWei: state.balanceWei.toString() } : {}),
     };
@@ -96,12 +97,12 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
       return { ...(await status()), transactionHash: deployment.transaction_hash };
     },
     async getPayWallet() {
-      const current = await accountState();
+      const [current, paymasterKey] = await Promise.all([accountState(), options.paymaster.load()]);
       const state = determineWalletState(
         Boolean(current.secret),
         current.deployed,
         current.balanceWei,
-        Boolean(options.avnuApiKey),
+        Boolean(paymasterKey),
       );
       if (state !== "ready" || !current.secret || !current.account) {
         throw new Error(`Wallet ${state}. Call wallet_status for the required action.`);
@@ -111,6 +112,7 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
         privateKey: current.secret.privateKey,
         address: current.account.address,
         passphrase: current.secret.passphrase,
+        avnuApiKey: paymasterKey ?? undefined,
       });
     },
   };

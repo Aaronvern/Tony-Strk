@@ -20,14 +20,14 @@
 import { RpcProvider, Signer, constants, hash, num } from "starknet";
 import { IndexerDiscoveryProvider, ProvingServiceProofProvider } from "@starkware-libs/starknet-privacy-sdk";
 import { CorePrivateTransfersProver, AvnuPaymaster, SdkWallet } from "@starkware-libs/starknet-privacy-client";
-import { createKeychainStore } from "../../server/src/pay/keychain.ts";
+import { createKeychainStore, createPaymasterKeyStore } from "../../server/src/pay/keychain.ts";
 import { createCounterfactualAccount } from "../../server/src/pay/account.ts";
 
 const RPC = process.env.STARKNET_RPC_URL ?? "https://starknet-sepolia.drpc.org";
 const PROVING_URL = process.env.PROVING_SERVICE_URL ?? "https://transaction-prover.alpha-sepolia.sw-dev.io";
 const INDEXER_URL = process.env.INDEXER_URL ?? "https://discovery-service.alpha-sepolia.sw-dev.io";
 const PAYMASTER_URL = process.env.PAYMASTER_URL ?? "https://sepolia.paymaster.avnu.fi";
-const API_KEY = process.env.AVNU_API_KEY;
+const API_KEY = process.env.AVNU_API_KEY ?? await createPaymasterKeyStore().load();
 const POOL = process.env.POOL_ADDRESS ?? "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
 const STRK = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const keychain = process.env.ACCOUNT_PRIVATE_KEY

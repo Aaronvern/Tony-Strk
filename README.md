@@ -184,7 +184,7 @@ Then call `wallet_status` through Codex or Claude Code. When it reports `needs_d
 
 The private key and privacy passphrase stay in the macOS Keychain. The MCP client never receives them.
 
-Set `AVNU_API_KEY` in the gitignored `.env` before payment. Get this key from [AVNU](https://portal.avnu.fi).
+Get an AVNU key from [AVNU](https://portal.avnu.fi). Then run `npm run paymaster:set` and paste it in your terminal.
 
 After `wallet_status` reports `ready`, the local agent can call `pay` automatically.
 
@@ -200,6 +200,7 @@ Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to
 | `scripts/faucet.mjs` | funds a Sepolia address (proof-of-work gated, no auth) |
 | `scripts/deploy-account.mjs` | deploys a counterfactual Ready/Argent account |
 | `scripts/create-sepolia-wallet.mjs` | creates the Keychain-backed local Sepolia wallet |
+| `scripts/set-avnu-key.mjs` | saves the AVNU paymaster key in the macOS Keychain |
 
 No `.env` is required for the local wallet. The gitignored root `.env` can hold non-secret network settings. **Use testnet funds only.**
 

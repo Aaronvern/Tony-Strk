@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createKeychainStore } from "../src/pay/keychain.ts";
+import { createKeychainStore, createPaymasterKeyStore } from "../src/pay/keychain.ts";
 
 const wallet = {
   privateKey: "0x123",
@@ -33,4 +33,19 @@ test("the Keychain store treats a missing secret as an uncreated wallet", async 
   });
 
   assert.equal(await store.load(), null);
+});
+
+test("the Keychain stores the paymaster key separately from the wallet", async () => {
+  let secret = "";
+  const store = createPaymasterKeyStore({
+    exec: async (args) => {
+      if (args[0] === "find-generic-password") return secret;
+      secret = args[args.indexOf("-w") + 1];
+      return "";
+    },
+  });
+
+  await store.save("paymaster-key");
+
+  assert.equal(await store.load(), "paymaster-key");
 });

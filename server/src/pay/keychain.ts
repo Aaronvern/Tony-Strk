@@ -4,7 +4,8 @@ import { promisify } from "node:util";
 import type { WalletSecret } from "./account.ts";
 
 const execFileAsync = promisify(execFile);
-const SERVICE = "tony-strk.sepolia.wallet";
+const WALLET_SERVICE = "tony-strk.sepolia.wallet";
+const PAYMASTER_SERVICE = "tony-strk.sepolia.paymaster";
 const ACCOUNT = "default";
 
 type KeychainExec = (args: string[]) => Promise<string>;
@@ -14,9 +15,15 @@ export interface KeychainStore {
   save(secret: WalletSecret): Promise<void>;
 }
 
-export function createKeychainStore(
+export interface PaymasterKeyStore {
+  load(): Promise<string | null>;
+  save(key: string): Promise<void>;
+}
+
+function createGenericStore(
+  service: string,
   deps: { exec?: KeychainExec } = {},
-): KeychainStore {
+): PaymasterKeyStore {
   if (process.platform !== "darwin") {
     throw new Error("The local wallet requires the macOS Keychain.");
   }
@@ -34,16 +41,12 @@ export function createKeychainStore(
         const value = await execute([
           "find-generic-password",
           "-s",
-          SERVICE,
+          service,
           "-a",
           ACCOUNT,
           "-w",
         ]);
-        const secret = JSON.parse(value) as WalletSecret;
-        if (!secret.privateKey || !secret.passphrase) {
-          throw new Error("The macOS Keychain wallet entry is invalid.");
-        }
-        return secret;
+        return value;
       } catch (error) {
         if ((error as { code?: number }).code === 44) return null;
         throw error;
@@ -54,12 +57,36 @@ export function createKeychainStore(
         "add-generic-password",
         "-U",
         "-s",
-        SERVICE,
+        service,
         "-a",
         ACCOUNT,
         "-w",
-        JSON.stringify(secret),
+        secret,
       ]);
     },
   };
+}
+
+export function createKeychainStore(
+  deps: { exec?: KeychainExec } = {},
+): KeychainStore {
+  const store = createGenericStore(WALLET_SERVICE, deps);
+  return {
+    async load() {
+      const value = await store.load();
+      if (!value) return null;
+      const secret = JSON.parse(value) as WalletSecret;
+      if (!secret.privateKey || !secret.passphrase) {
+        throw new Error("The macOS Keychain wallet entry is invalid.");
+      }
+      return secret;
+    },
+    save: (secret) => store.save(JSON.stringify(secret)),
+  };
+}
+
+export function createPaymasterKeyStore(
+  deps: { exec?: KeychainExec } = {},
+): PaymasterKeyStore {
+  return createGenericStore(PAYMASTER_SERVICE, deps);
 }
