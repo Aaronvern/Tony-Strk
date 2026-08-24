@@ -92,6 +92,10 @@ export default function PoolConsole() {
   const [shieldedAt, setShieldedAt] = useState(null)
   const [log, setLog] = useState([])
   const [records, setRecords] = useState([])
+  // The step whose hash the wallet never returned, so the paste box knows
+  // what to label a recovered hash.
+  const [lost, setLost] = useState(null)
+  const [recovered, setRecovered] = useState('')
   const [pending, setPending] = useState(null)
   const [elapsed, setElapsed] = useState(0)
   const [form, setForm] = useState({ shield: '30', transfer: '1', unshield: '1', recipient: '' })
@@ -326,6 +330,7 @@ export default function PoolConsole() {
           at: new Date().toISOString(),
         },
       ])
+      setLost(null)
       say(`${kind} submitted — ${hash}`, 'good')
       say(`${chain.voyager}${hash}`, 'good')
 
@@ -341,11 +346,62 @@ export default function PoolConsole() {
       await readChainState(chain, info.address)
     } catch (error) {
       say(String(error?.message ?? error), 'bad')
+      setLost(kind)
       say(
-        'If that was a timeout rather than a rejection, look for the hash in the wallet ' +
-          'activity list before paying the pool fee again.',
-        'info'
+        'A timeout is NOT a rejection — the transaction may already have landed. Open ' +
+          'Ready → Activity, copy the hash, and paste it below before paying again.',
+        'warn'
       )
+      if (kind === 'transfer') {
+        say(
+          'A private transfer emits nothing that names the sender, so this hash cannot be ' +
+            'recovered from the chain. Ready is the only place it exists.',
+          'info'
+        )
+      }
+    } finally {
+      setPending(null)
+    }
+  }
+
+  /**
+   * Record a hash the wallet never handed back. Checked against the chain
+   * first: an unverified hash in the submission file is worse than a missing
+   * one, because the hub verifies each hash on-chain and a bad one reads as a
+   * false claim rather than an omission.
+   */
+  async function recordByHand() {
+    const hash = recovered.trim()
+    setPending('checking that hash')
+    try {
+      if (!/^0x[0-9a-fA-F]{1,64}$/.test(hash)) throw new Error('That is not a Starknet transaction hash.')
+      if (records.some((r) => BigInt(r.hash) === BigInt(hash))) throw new Error('That hash is already recorded.')
+
+      const receipt = await new RpcProvider({ nodeUrl: chain.rpc }).getTransactionReceipt(hash)
+      if (receipt.execution_status && receipt.execution_status !== 'SUCCEEDED') {
+        throw new Error(`That transaction did not succeed (${receipt.execution_status}).`)
+      }
+      // Only a transaction that actually touched the pool counts.
+      const touched = (receipt.events ?? []).some((e) => BigInt(e.from_address) === BigInt(chain.pool))
+      if (!touched) throw new Error('That transaction never touched the STRK20 pool.')
+
+      const kind = lost ?? 'recovered'
+      setRecords((r) => [
+        ...r,
+        {
+          kind,
+          hash,
+          chain: chain.name,
+          voyager: `${chain.voyager}${hash}`,
+          starkscan: `${chain.starkscan}${hash}`,
+          at: new Date().toISOString(),
+        },
+      ])
+      say(`recorded ${kind} — ${hash} (${receipt.finality_status})`, 'good')
+      setRecovered('')
+      setLost(null)
+    } catch (error) {
+      say(String(error?.message ?? error), 'bad')
     } finally {
       setPending(null)
     }
@@ -521,6 +577,28 @@ export default function PoolConsole() {
             </tbody>
           </table>
         )}
+        <div className="step">
+          <label htmlFor="recovered">
+            {lost ? `Recover the ${lost} hash from Ready → Activity` : 'Add a hash by hand'}
+          </label>
+          <div className="row">
+            <input
+              id="recovered"
+              className="mono"
+              value={recovered}
+              onChange={(e) => setRecovered(e.target.value)}
+              placeholder="0x…"
+            />
+            <button onClick={recordByHand} disabled={!chain || !recovered.trim()}>
+              Record
+            </button>
+          </div>
+          <p className="muted">
+            A wallet that goes quiet still submits. Paste the hash here rather than paying the
+            pool fee a second time — this checks it on-chain before recording it.
+          </p>
+        </div>
+
         {mainnetHashes.length > 0 && (
           <>
             <p className="muted">Mainnet hashes, in the shape `strk20.json` wants:</p>
