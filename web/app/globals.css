@@ -20,3 +20,43 @@ h1, h2, h3 { margin: 0; font-family: Arial Black, Arial, sans-serif; font-weight
 @media (max-width: 820px) { .site-header { grid-template-columns: 1fr auto; } nav { display: none; }.statement, .console, .build { grid-template-columns: 1fr; }.hero { min-height: min(760px, calc(100vh - 76px)); }.hero-copy { padding: 5rem 7vw 4rem; }.hero-caption { right: 7vw; }.statement > p { margin-top: 2rem; }.scope-grid, .future-flow { grid-template-columns: 1fr; }.scope-grid article, .future-flow article { min-height: 0; border-right: 0; border-bottom: 1px solid var(--line); }.scope-grid article:last-child, .future-flow article:last-child { border-bottom: 0; }.scope-grid h3, .future-flow h3 { margin-top: 2.5rem; }.technical-board { min-height: 113vw; }.callout { width: min(15rem, 38%); }.system-plates { grid-template-columns: 1fr; }.system-plate { min-height: 92vw; }.route-form { margin-top: 2.5rem; }.route-steps { grid-template-columns: repeat(2,1fr); }.route-steps article:nth-child(2) { border-right: 0; }.route-steps article:nth-child(2) i { display: none; }.build div { margin-top: 2rem; } }
 @media (max-width: 520px) { .site-header, footer { padding-inline: 1.2rem; }.header-note { font-size: .52rem; }.hero-copy { padding: 4.5rem 1.2rem 4rem; }.hero-caption { right: 1.2rem; left: 1.2rem; gap: 0; justify-content: space-between; }.hero-background { object-position: 66% center; }.technical-board { min-height: 140vw; }.callout { width: 48%; padding: .7rem; }.callout span { margin-bottom: 1rem; }.callout p { display: none; }.callout-core { top: 8%; left: 3%; }.callout-frame { top: 27%; right: 3%; }.callout-lock { bottom: 8%; left: 3%; }.callout::after { display: none; }.system-plate { min-height: 120vw; }.route-steps { grid-template-columns: 1fr; }.route-steps article { border-right: 0; border-bottom: 1px solid var(--blue); }.route-steps article:last-child { border-bottom: 0; }.route-steps article i { display: none; }.url-control { flex-direction: column; }.url-control button { min-height: 48px; }.build { gap: 0; } footer { grid-template-columns: 1fr; gap: 1rem; padding-block: 1.5rem; } footer p:last-child { justify-self: start; } }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+/* Pool console (/pool). An operator surface, not a page to be read: dense,
+   monospaced where it matters, and loud about which network it is on. */
+.pool { max-width: 60rem; margin: 0 auto; padding: 2.5rem var(--page-gutter) 6rem; }
+.pool header { display: block; min-height: 0; padding: 0 0 2rem; border-bottom: 1px solid var(--line); }
+.pool header .wordmark { display: inline-block; margin-bottom: 1.5rem; }
+.pool h1 { font-size: clamp(2.4rem, 6vw, 4rem); line-height: .85; }
+.pool h2 { margin-bottom: 1.2rem; font-size: .7rem; letter-spacing: .14em; }
+.pool header p { max-width: 34rem; margin: 1rem 0 0; color: var(--ink); font-size: .95rem; line-height: 1.5; }
+.pool .panel { margin-top: 2.5rem; padding: 1.5rem; border: 1px solid var(--line); background: #fff; }
+.pool .wallets { display: flex; flex-wrap: wrap; gap: .6rem; }
+.pool button { padding: .7rem 1.1rem; border: 0; color: var(--paper); background: var(--blue); font-size: .75rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.pool button:disabled { background: var(--warm); color: var(--ink); cursor: not-allowed; }
+.pool button.ghost { margin-top: 1.2rem; color: var(--blue); background: transparent; border: 1px solid var(--blue); }
+.pool .facts { margin: 0; display: grid; gap: .55rem; }
+.pool .facts > div { display: grid; grid-template-columns: 8.5rem 1fr; gap: 1rem; align-items: baseline; }
+.pool dt { font-size: .62rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+.pool dd { margin: 0; color: var(--ink); font-size: .85rem; }
+.pool .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; }
+.pool .break { word-break: break-all; }
+.pool .muted { color: var(--ink); opacity: .72; font-size: .76rem; line-height: 1.5; }
+.pool .good { color: #0a7a3d; }
+.pool .bad, .pool .danger { color: #b3261e; }
+.pool .warn { color: #9a5b00; }
+.pool .banner { margin: 1.5rem 0 0; padding: .9rem 1.1rem; border: 1px solid currentColor; font-size: .8rem; line-height: 1.5; }
+.pool .step { padding: 1.4rem 0; border-top: 1px solid var(--line); }
+.pool .step:first-of-type { padding-top: 0; border-top: 0; }
+.pool label { display: block; margin-bottom: .6rem; font-size: .65rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
+.pool .row { display: flex; align-items: stretch; gap: .5rem; }
+.pool input { min-width: 0; flex: 1; padding: .7rem .8rem; border: 1px solid var(--blue); color: var(--ink); background: #fffaf1; }
+.pool input.wide { width: 100%; flex: none; margin-top: .5rem; }
+.pool .unit { display: grid; place-items: center; padding: 0 .6rem; font-size: .7rem; font-weight: 800; }
+.pool .step p { margin: .7rem 0 0; }
+.pool table { width: 100%; margin-top: .5rem; border-collapse: collapse; font-size: .78rem; }
+.pool th { text-align: left; font-size: .6rem; letter-spacing: .12em; text-transform: uppercase; }
+.pool th, .pool td { padding: .5rem .6rem .5rem 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.pool pre { overflow-x: auto; margin: .6rem 0 0; padding: .9rem; border: 1px solid var(--line); background: var(--warm); }
+.pool .log { max-height: 24rem; overflow-y: auto; margin: 0; padding-left: 1.2rem; font-size: .78rem; line-height: 1.6; }
+.pool .log li { word-break: break-word; }
+@media (max-width: 560px) { .pool .facts > div { grid-template-columns: 1fr; gap: .15rem; } .pool .row { flex-wrap: wrap; } }

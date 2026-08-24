@@ -15,6 +15,13 @@ Explorer URL shapes:
 | Mainnet | `https://voyager.online/tx/<hash>` | `https://starkscan.co/tx/<hash>` |
 | Sepolia | `https://sepolia.voyager.online/tx/<hash>` | `https://sepolia.starkscan.co/tx/<hash>` |
 
+## How these get made
+
+Wallet-driven pool operations come from the pool console at `/pool`
+(`npm run dev`). It records the hash, both explorer links, and the network for
+every submission, and prints the mainnet hashes in the shape `strk20.json`
+wants. Contract deploys and helper spikes come from `scripts/spikes/`.
+
 ## Sepolia
 
 | Date | What | Hash | Voyager | Starkscan |
