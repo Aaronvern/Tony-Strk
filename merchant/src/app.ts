@@ -4,6 +4,7 @@ import type { Request, Response } from "express";
 import { CATALOG, findArticle, resourceHash } from "./catalog.ts";
 import type { Article } from "./catalog.ts";
 import { verifyReceipt } from "./receipt.ts";
+import { createMemoryStore, type ReceiptStore } from "./store.ts";
 import type { ChainReceipt } from "./receipt.ts";
 
 export interface MerchantDeps {
@@ -22,6 +23,25 @@ export interface MerchantDeps {
   /** Overridable so a test does not have to wait out a real expiry. */
   accessTtlMs?: number;
   now?: () => number;
+  /**
+   * Where spent receipts and access grants live. Defaults to memory, which
+   * forgets every spent receipt on restart — fine for a test, not for a
+   * merchant anyone can reach.
+   */
+  store?: ReceiptStore;
+  /**
+   * Express `trust proxy` setting, when this merchant runs behind one.
+   *
+   * TLS terminates at the proxy, so `req.protocol` is `http` on the inside and
+   * the 402 would advertise an `http://` resource for a request the client made
+   * over `https://`. A payer that checks the terms match what it asked for then
+   * refuses — correctly, since those are different origins and ignoring the
+   * difference would wave through a downgrade.
+   *
+   * Left off by default: `X-Forwarded-Proto` is a header any client can send,
+   * so it is only trustworthy when something in front is known to overwrite it.
+   */
+  trustProxy?: boolean | string | number;
 }
 
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
@@ -44,16 +64,18 @@ export function createMerchantApp(deps: MerchantDeps) {
 
   /**
    * Redeemed receipts. A transaction hash unlocks a resource exactly once and
-   * is then spent: without this, the first buyer could publish their hash and
-   * everyone else would read for free. What the buyer gets instead is a bearer
-   * token, which is theirs to keep and equally theirs to leak — the difference
-   * is that leaking it does not cost the merchant a second sale it never made.
+   * is then spent. This is not about a buyer sharing their hash: `PaywallPaid`
+   * is a public event — that is what makes it verifiable — so anyone watching
+   * the pool can read a valid hash off the chain seconds after it lands.
+   * Without this, every article unlocks for whoever is watching. What the buyer
+   * gets instead is a bearer token, which is theirs to keep and theirs to leak,
+   * and which nobody can lift off the chain.
    */
-  const spent = new Map<string, number>();
-  const grants = new Map<string, { slug: string; expires: number }>();
+  const store = deps.store ?? createMemoryStore();
 
   const app = express();
   app.disable("x-powered-by");
+  if (deps.trustProxy !== undefined) app.set("trust proxy", deps.trustProxy);
 
   const terms = (article: Article, req: Request) => ({
     scheme: "strk20-anonymizer",
@@ -101,7 +123,7 @@ export function createMerchantApp(deps: MerchantDeps) {
     // who already paid never sees a second 402.
     const token = header(req, "x-access-token");
     if (token) {
-      const grant = grants.get(token);
+      const grant = await store.readGrant(token);
       if (grant && grant.slug === article.slug && grant.expires > now()) {
         res.type("html").send(render(article));
         return;
@@ -125,7 +147,7 @@ export function createMerchantApp(deps: MerchantDeps) {
 
     const txHash = payment.trim();
     const key = `${BigInt(txHash).toString(16)}:${article.slug}`;
-    if (spent.has(key)) {
+    if (await store.isSpent(key)) {
       res.status(409).json({
         error: "that receipt has already been redeemed",
         hint: "Keep the access token from the first redemption, or pay again.",
@@ -166,9 +188,9 @@ export function createMerchantApp(deps: MerchantDeps) {
       return;
     }
 
-    spent.set(key, now());
+    await store.markSpent(key, now());
     const granted = crypto.randomUUID();
-    grants.set(granted, { slug: article.slug, expires: now() + ttl });
+    await store.saveGrant(granted, { slug: article.slug, expires: now() + ttl });
 
     res.setHeader("X-Access-Token", granted);
     res.setHeader("X-Payment-Verified", `${verdict.price} ${deps.asset}`);

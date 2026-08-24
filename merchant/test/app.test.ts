@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { createMerchantApp } from "../src/app.ts";
+import { createFileStore } from "../src/store.ts";
 import type { MerchantDeps } from "../src/app.ts";
 import { resourceHash } from "../src/catalog.ts";
 import { PAYWALL_PAID } from "../src/receipt.ts";
@@ -218,4 +223,74 @@ test("the index lists every article and is free to read", async (t) => {
   for (const slug of ["agent-privacy", "settlement-without-identity", "the-402-that-works"]) {
     assert.match(html, new RegExp(slug));
   }
+});
+
+test("a redeemed receipt stays redeemed across a merchant restart", async (t) => {
+  // The whole reason the store is on disk. PaywallPaid is public: anyone
+  // watching the pool can read a valid hash, so a spent set that empties on
+  // restart hands out free articles to whoever is looking.
+  const dir = await mkdtemp(join(tmpdir(), "merchant-restart-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const path = join(dir, "state.json");
+
+  const boot = async () => {
+    const app = createMerchantApp({
+      payTo: PAY_TO,
+      anonymizer: ANONYMIZER,
+      asset: ASSET,
+      network: "starknet-sepolia",
+      explorerBase: "https://sepolia.voyager.online",
+      fetchReceipt: async () => receiptFor(SLUG),
+      store: await createFileStore(path),
+    });
+    const server = app.listen(0);
+    const { port } = server.address() as { port: number };
+    return {
+      url: `http://127.0.0.1:${port}/article/${SLUG}`,
+      close: () => new Promise((done) => server.close(done)),
+    };
+  };
+
+  const first = await boot();
+  const paid = await fetch(first.url, { headers: { "X-Payment": "0xabc123" } });
+  assert.equal(paid.status, 200);
+  const token = paid.headers.get("x-access-token")!;
+  await first.close();
+
+  const second = await boot();
+  t.after(second.close);
+
+  const replay = await fetch(second.url, { headers: { "X-Payment": "0xabc123" } });
+  assert.equal(replay.status, 409, "a restart must not re-open a spent receipt");
+
+  // And the reader who actually paid is not asked to pay again.
+  const returning = await fetch(second.url, { headers: { "X-Access-Token": token } });
+  assert.equal(returning.status, 200);
+});
+
+test("behind a trusted proxy the terms name the URL the client actually used", async (t) => {
+  // TLS terminates at the proxy, so req.protocol is http inside. Advertising
+  // http:// terms for an https:// request makes a careful payer refuse, since
+  // those are different origins.
+  const h = harness({ trustProxy: 1 });
+  t.after(h.close);
+
+  const res = await fetch(h.url(`/article/${SLUG}`), {
+    headers: { "X-Forwarded-Proto": "https", "X-Forwarded-Host": "shop.example" },
+  });
+  const [terms] = (await res.json()).accepts;
+  assert.match(terms.resource, /^https:\/\//);
+});
+
+test("without trust proxy a forwarded header cannot rewrite the terms", async (t) => {
+  // X-Forwarded-Proto is a header any client can send. It is only meaningful
+  // when something in front is known to overwrite it.
+  const h = harness();
+  t.after(h.close);
+
+  const res = await fetch(h.url(`/article/${SLUG}`), {
+    headers: { "X-Forwarded-Proto": "https" },
+  });
+  const [terms] = (await res.json()).accepts;
+  assert.match(terms.resource, /^http:\/\//);
 });

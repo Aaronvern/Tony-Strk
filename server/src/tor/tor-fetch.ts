@@ -19,11 +19,13 @@ export function createTorFetch() {
 
   async function torFetch(
     target: string,
-    { proxy, address, redirect, signal }: {
+    { proxy, address, redirect, signal, headers }: {
       proxy: string;
       address?: string;
       redirect?: "manual";
       signal?: AbortSignal;
+      /** Request headers. Used to carry a payment receipt on a paid retry. */
+      headers?: Record<string, string>;
     },
   ): Promise<Response> {
     const destination = address ?? new URL(target).hostname;
@@ -44,6 +46,7 @@ export function createTorFetch() {
       dispatcher: agent,
       redirect,
       signal,
+      headers,
     })) as unknown as Response;
   }
 

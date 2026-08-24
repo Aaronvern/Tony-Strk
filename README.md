@@ -200,6 +200,21 @@ Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to
 
 ### The paywall loop
 
+**An agent can now do this by itself.** The MCP server exposes `pay_paywall`:
+give it a URL, and it browses through Tor, reads a 402, settles it through the
+pool, and returns the unlocked page. Proven in
+[`0x37e3d5ad…`](https://sepolia.voyager.online/tx/0x37e3d5ad03efa7a4ef0890d16685f8808ae3160270827506aca83eda967c5a2)
+— 23 seconds start to finish, merchant 0.1 → 0.125 STRK, helper left empty.
+
+It refuses a 402 naming a helper it does not trust (the `invoke` leg hands that
+contract the money) and a price above `PAYWALL_MAX_PRICE`. Set
+`PAYWALL_ANONYMIZER_ADDRESS` to name the helpers you trust; leave it unset and
+the tool is not registered at all.
+
+`browse` deliberately does **not** expose request headers. Only the settlement
+sets one, and only the receipt, on the one URL that just asked for payment.
+
+
 The two halves, connected. `merchant/` is a paywalled site that takes anonymous
 payment; `scripts/pay-paywall.mjs` is the agent side that settles a 402.
 
