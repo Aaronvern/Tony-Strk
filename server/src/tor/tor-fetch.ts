@@ -1,6 +1,8 @@
 import { Agent, buildConnector, fetch as undiciFetch } from "undici";
 import { SocksClient } from "socks";
 
+const MAX_AGENTS = 32;
+
 /**
  * A fetch that goes through a SOCKS5 proxy.
  *
@@ -8,26 +10,40 @@ import { SocksClient } from "socks";
  * doesn't recognise, so the only safe way to do this is to replace the
  * connector underneath undici rather than pass a proxy alongside the request.
  *
- * The destination hostname is handed to the proxy unresolved, so name lookups
- * happen at the exit relay. Resolving locally first would leak every
- * destination to the local DNS resolver even though the traffic itself was
- * tunnelled.
+ * Browse resolves and vets each destination before calling this fetcher. The
+ * SOCKS connection uses that address, while Undici retains the URL hostname
+ * for HTTP Host and HTTPS SNI.
  */
 export function createTorFetch() {
   const agents = new Map<string, Agent>();
 
   async function torFetch(
     target: string,
-    { proxy }: { proxy: string },
+    { proxy, address, redirect, signal }: {
+      proxy: string;
+      address?: string;
+      redirect?: "manual";
+      signal?: AbortSignal;
+    },
   ): Promise<Response> {
-    let agent = agents.get(proxy);
+    const destination = address ?? new URL(target).hostname;
+    const key = `${proxy}\0${destination}`;
+    let agent = agents.get(key);
     if (!agent) {
-      agent = buildSocksAgent(proxy);
-      agents.set(proxy, agent);
+      if (agents.size >= MAX_AGENTS) {
+        const oldestKey = agents.keys().next().value!;
+        const oldest = agents.get(oldestKey)!;
+        agents.delete(oldestKey);
+        void oldest.close().catch(() => {});
+      }
+      agent = buildSocksAgent(proxy, destination);
+      agents.set(key, agent);
     }
 
     return (await undiciFetch(target, {
       dispatcher: agent,
+      redirect,
+      signal,
     })) as unknown as Response;
   }
 
@@ -40,7 +56,7 @@ export function createTorFetch() {
   return torFetch;
 }
 
-function buildSocksAgent(proxy: string): Agent {
+function buildSocksAgent(proxy: string, destination: string): Agent {
   const { hostname: proxyHost, port: proxyPort } = new URL(proxy);
   const connect = buildConnector({});
 
@@ -51,7 +67,7 @@ function buildSocksAgent(proxy: string): Agent {
           proxy: { host: proxyHost, port: Number(proxyPort), type: 5 },
           command: "connect",
           destination: {
-            host: opts.hostname,
+            host: destination,
             port: Number(opts.port) || (opts.protocol === "https:" ? 443 : 80),
           },
         });

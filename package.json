@@ -21,6 +21,9 @@
     "test:contracts": "cd contracts && snforge test",
     "build:contracts": "cd contracts && scarb build",
     "verify:mcp": "npm run verify:mcp --workspace @tony-strk/server",
+    "wallet:create": "node scripts/create-sepolia-wallet.mjs",
+    "wallet:setup": "bash scripts/setup-local-wallet.sh",
+    "paymaster:set": "node scripts/set-avnu-key.mjs",
     "spike:wallet": "node scripts/spikes/mock-wallet-spike.mjs",
     "spike:services": "node scripts/spikes/check-services.mjs",
     "setup": "bash scripts/setup-sdk.sh"

@@ -39,6 +39,217 @@ test("browse rejects non-http schemes even when a proxy is configured", async ()
   assert.equal(attempted, false, "must not read local files for the agent");
 });
 
+test("browse rejects credential-bearing URLs before fetching", async () => {
+  let attempted = false;
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "https://token@example.com/article" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => {
+            attempted = true;
+            return new Response("leaked");
+          },
+        },
+      ),
+    /credentials/i,
+  );
+
+  assert.equal(attempted, false, "must reject credentials before the request");
+});
+
+test("browse rejects redirects to private addresses", async () => {
+  let attempts = 0;
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "https://8.8.8.8/article" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => {
+            attempts++;
+            return new Response(null, {
+              status: 302,
+              headers: { location: "http://127.0.0.1:8787/private" },
+            });
+          },
+        },
+      ),
+    /public/i,
+  );
+
+  assert.equal(attempts, 1, "must not fetch the rejected redirect target");
+});
+
+test("browse rejects private addresses before fetching", async () => {
+  let attempted = false;
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "http://127.0.0.1:8787" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => {
+            attempted = true;
+            return new Response("leaked");
+          },
+        },
+      ),
+    /public/i,
+  );
+
+  assert.equal(attempted, false, "must reject private targets before the request");
+});
+
+test("browse rejects Alibaba metadata addresses before fetching", async () => {
+  let attempted = false;
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "http://100.100.100.200/latest/meta-data" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => {
+            attempted = true;
+            return new Response("leaked");
+          },
+        },
+      ),
+    /public/i,
+  );
+
+  assert.equal(attempted, false, "must reject metadata before the request");
+});
+
+test("browse rejects non-public IPv4 hidden in IPv6 translation prefixes", async () => {
+  const targets = [
+    "http://[64:ff9b::7f00:1]/",
+    "http://[64:ff9b::a9fe:a9fe]/",
+    "http://[::ffff:0:7f00:1]/",
+    "http://[::ffff:0:a9fe:a9fe]/",
+  ];
+
+  for (const url of targets) {
+    let attempted = false;
+    await assert.rejects(
+      () =>
+        browse(
+          { url },
+          {
+            torProxy: "socks5://127.0.0.1:9050",
+            fetchImpl: () => {
+              attempted = true;
+              return new Response("leaked");
+            },
+          },
+        ),
+      /public/i,
+    );
+    assert.equal(attempted, false, `must reject translated private target ${url}`);
+  }
+});
+
+test("browse allows public IPv4 in IPv6 translation prefixes", async () => {
+  for (const url of [
+    "http://[64:ff9b::808:808]/",
+    "http://[::ffff:0:808:808]/",
+  ]) {
+    const result = await browse(
+      { url },
+      {
+        torProxy: "socks5://127.0.0.1:9050",
+        fetchImpl: () => new Response("public"),
+      },
+    );
+    assert.equal(result.text, "public");
+  }
+});
+
+test("browse rejects a response larger than 1 MiB", async () => {
+  let cancelled = false;
+  const stream = new ReadableStream({
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "https://8.8.8.8/article" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () =>
+            new Response(stream, { headers: { "content-length": "1048577" } }),
+        },
+      ),
+    /1 MiB/i,
+  );
+
+  assert.equal(cancelled, true, "must stop a sender with an oversized declaration");
+});
+
+test("browse cancels an oversized response stream", async () => {
+  let cancelled = false;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(1024 * 1024 + 1));
+    },
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  await assert.rejects(
+    () =>
+      browse(
+        { url: "https://8.8.8.8/article" },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: () => new Response(stream),
+        },
+      ),
+    /1 MiB/i,
+  );
+
+  assert.equal(cancelled, true, "must stop an oversized sender");
+});
+
+test("browse cancels a redirect response before following it", async () => {
+  let attempts = 0;
+  let cancelled = false;
+  const stream = new ReadableStream({
+    cancel() {
+      cancelled = true;
+    },
+  });
+
+  const result = await browse(
+    { url: "https://8.8.8.8/old" },
+    {
+      torProxy: "socks5://127.0.0.1:9050",
+      fetchImpl: () => {
+        attempts++;
+        if (attempts === 1) {
+          return new Response(stream, {
+            status: 302,
+            headers: { location: "https://1.1.1.1/new" },
+          });
+        }
+        assert.equal(cancelled, true, "redirect body must be cancelled first");
+        return new Response("followed");
+      },
+    },
+  );
+
+  assert.equal(result.text, "followed");
+});
+
 test("browse returns page text fetched through the configured proxy", async () => {
   const seen = {};
   const fetchImpl = (target, options) => {
@@ -70,7 +281,7 @@ test("browse flags a 402 as a paywall rather than returning the page", async () 
     new Response("<html>Pay 5 STRK to read this</html>", { status: 402 });
 
   const result = await browse(
-    { url: "https://paywalled.example/article" },
+    { url: "https://example.com/article" },
     { torProxy: "socks5://127.0.0.1:9050", fetchImpl },
   );
 

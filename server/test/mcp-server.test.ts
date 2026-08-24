@@ -22,15 +22,44 @@ async function connect(deps = {}) {
   return client;
 }
 
-test("an MCP client can discover the tools", async () => {
-  const client = await connect();
+test("pay is only discovered when explicitly enabled", async () => {
+  const disabledClient = await connect();
 
-  const { tools } = await client.listTools();
+  const { tools: disabledTools } = await disabledClient.listTools();
 
   assert.deepEqual(
-    tools.map((tool) => tool.name),
+    disabledTools.map((tool) => tool.name),
+    ["browse"],
+  );
+
+  const enabledClient = await connect({
+    pay: { wallet: {}, token: "STRK", explorerBase: "" },
+  });
+  const { tools: enabledTools } = await enabledClient.listTools();
+
+  assert.deepEqual(
+    enabledTools.map((tool) => tool.name),
     ["browse", "pay"],
   );
+});
+
+test("wallet tools tell an MCP client how to prepare automatic payments", async () => {
+  const client = await connect({
+    wallet: {
+      status: async () => ({ state: "needs_funding", address: "0x123" }),
+      create: async () => ({ state: "needs_funding", address: "0x123" }),
+      deploy: async () => ({ state: "ready", address: "0x123", transactionHash: "0xabc" }),
+    },
+  });
+
+  const { tools } = await client.listTools();
+  assert.deepEqual(
+    tools.map((tool) => tool.name),
+    ["browse", "wallet_status", "wallet_create", "wallet_deploy"],
+  );
+
+  const result = await client.callTool({ name: "wallet_status", arguments: {} });
+  assert.deepEqual(result.structuredContent, { state: "needs_funding", address: "0x123" });
 });
 
 test("a paywalled page tells the client that payment is required", async () => {
@@ -44,7 +73,7 @@ test("a paywalled page tells the client that payment is required", async () => {
 
   const result = await client.callTool({
     name: "browse",
-    arguments: { url: "https://paywalled.example/article" },
+    arguments: { url: "https://example.com/article" },
   });
 
   // Without this the agent gets the paywall's HTML and no way to tell it

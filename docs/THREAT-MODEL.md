@@ -1,6 +1,13 @@
 # Tony Stark — Threat Model & Bulletproofing
 
-The purpose of this doc is to make the product survive an adversarial judge, a security researcher, and a real user who asks *"prove it."* It states exactly what is private, what is not, who we defend against, and how — with no overclaiming. If a claim isn't in the "Hidden ✅" column of §2, we do not make it.
+> **Archived / superseded (2026-08-21).** This threat model describes the
+> earlier remote browser-worker and hosted-tier proposal. Do not use its claims
+> for the active server. See the [README](../README.md),
+> [current privacy stack](PRIVACY-STACK.md), and
+> [Local MCP hardening design](superpowers/specs/2026-08-21-local-mcp-hardening-design.md)
+> for the loopback-only Tor HTTP fetcher and its current boundaries.
+
+This document preserves the historical proposal and its analysis; it is not an authoritative statement of current behavior.
 
 Every mechanism cited here was verified first-hand against the `starkware-libs/starknet-privacy` source on 2026-08-14.
 

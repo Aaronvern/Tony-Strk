@@ -1,8 +1,8 @@
 const steps = [
-  ["01", "MCP request", "The client asks Tony Strk to fetch a public URL."],
-  ["02", "Ephemeral worker", "A disposable session receives the request."],
-  ["03", "Tor egress", "The destination sees an exit relay, not the client IP."],
-  ["04", "Public web", "The response returns through the same isolated route."],
+  ["01", "Route input", "The browser validates a public HTTP(S) destination locally."],
+  ["02", "MCP browse (separate)", "The local MCP tool is separately runnable; the landing page does not invoke it."],
+  ["03", "Isolated worker (when run)", "With Obscura and Tor configured, the MCP tool creates one short-lived browser context."],
+  ["04", "Optional OHTTP", "Configured OHTTP uses relay and gateway services with no direct-worker fallback."],
 ];
 
 export function buildRoute(value) {
