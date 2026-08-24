@@ -158,22 +158,37 @@ if (deposit) {
   }
 }
 
+const base = buildPaywallActions(terms);
+
 console.log("\nDry run (proves the shape; the pool no-ops invoke client-side)…");
-const actions = await balanceSurplus(
-  buildPaywallActions(terms),
+const rehearsal = await balanceSurplus(
+  base,
   (candidate) => wallet.strk20PrepareInvoke(candidate, true),
   ADDRESS,
   STRK,
 );
-console.log(`  accepted — ${actions.length} legs`);
+console.log(`  accepted — ${rehearsal.actions.length} legs`);
 
 if (flag("dry")) {
   console.log("\n--dry, so stopping here. Nothing was spent.");
   process.exit(0);
 }
 
+// Balanced again from the base rather than reusing the rehearsal's list. Note
+// selection depends on what is in the pool right now, so the sink the dry run
+// measured can already be wrong. Retrying costs nothing: the surplus is raised
+// while building the proof, before anything is submitted.
 console.log("\nSettling…");
-const { transaction_hash } = await wallet.strk20InvokeTransaction(actions);
+const { actions, result } = await balanceSurplus(
+  base,
+  (candidate) => wallet.strk20InvokeTransaction(candidate),
+  ADDRESS,
+  STRK,
+);
+if (actions.length !== rehearsal.actions.length) {
+  console.log(`  note selection moved — settled with ${actions.length} legs`);
+}
+const { transaction_hash } = result;
 console.log(`  ${transaction_hash}`);
 console.log(`  https://sepolia.voyager.online/tx/${transaction_hash}`);
 const receipt = await node.waitForTransaction(transaction_hash);

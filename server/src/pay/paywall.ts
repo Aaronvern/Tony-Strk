@@ -202,34 +202,54 @@ export function buildPaywallActions(terms: PaymentTerms): unknown[] {
  *
  * The core SDK has `surplusTo()` for this, but the STRK20 action vocabulary
  * `strk20InvokeTransaction` speaks has no surplus action, so the sink has to
- * be an explicit private transfer back to the payer. The amount depends on
- * which notes were selected, so it is read off the rejection. A privacy-enabled
- * wallet does this itself; the SDK path does not.
+ * be an explicit private transfer back to the payer. A privacy-enabled wallet
+ * does this itself; the SDK path does not.
+ *
+ * The sink has to be balanced against the operation that will actually run.
+ * Which notes get selected depends on what is in the pool at that moment, so a
+ * sink measured during a dry run can be wrong by the time the real submission
+ * builds its proof — a deposit landing in between is enough. Both the dry run
+ * and the submission therefore balance themselves, starting from the same base.
+ *
+ * Retrying is safe: the surplus is raised by the action compiler while building
+ * the proof, before the paymaster is ever handed anything, so a rejected
+ * attempt costs nothing and settles nothing.
  */
 const SURPLUS = /Surplus of (\d+) found/;
 
-export async function balanceSurplus(
-  actions: unknown[],
-  dryRun: (actions: unknown[]) => Promise<unknown>,
+export interface Balanced<T> {
+  /** The action list that succeeded, sinks included. */
+  actions: unknown[];
+  result: T;
+}
+
+export async function balanceSurplus<T>(
+  base: unknown[],
+  run: (actions: unknown[]) => Promise<T>,
   payer: string,
   asset: string,
-  attempts = 3,
-): Promise<unknown[]> {
-  let candidate = [...actions];
+  attempts = 4,
+): Promise<Balanced<T>> {
+  // Sinks accumulate rather than replace. Each rejection reports what is still
+  // unaccounted for given the sinks already present, so the totals add up.
+  const sinks: unknown[] = [];
+
   for (let attempt = 0; attempt < attempts; attempt++) {
+    // Sinks go before the invoke, so the pool reads them as plain balancing legs.
+    const actions = [...base.slice(0, -1), ...sinks, base[base.length - 1]];
     try {
-      await dryRun(candidate);
-      return candidate;
+      return { actions, result: await run(actions) };
     } catch (error) {
       const found = SURPLUS.exec(String((error as Error)?.message ?? error));
       if (!found) throw error;
-      candidate = [
-        // Before the invoke, so the pool reads it as a plain balancing leg.
-        ...candidate.slice(0, -1),
-        { type: "transfer", token: asset, amount: hex(BigInt(found[1])), recipient: payer },
-        candidate[candidate.length - 1],
-      ];
+      sinks.push({
+        type: "transfer",
+        token: asset,
+        amount: hex(BigInt(found[1])),
+        recipient: payer,
+      });
     }
   }
+
   throw new Error(`Could not balance the note surplus in ${attempts} attempts.`);
 }

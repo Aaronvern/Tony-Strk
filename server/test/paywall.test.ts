@@ -148,27 +148,69 @@ test("the action list matches privacy_invoke's signature", () => {
 
 test("a surplus rejection is answered with a transfer back to the payer", async () => {
   const terms = parsePaymentRequired(body(), OPTIONS);
-  const base = buildPaywallActions(terms);
   let call = 0;
 
-  const balanced = (await balanceSurplus(
-    base,
+  const { actions, result } = await balanceSurplus(
+    buildPaywallActions(terms),
     async () => {
       if (call++ === 0) throw new Error("Surplus of 950000000000000000 found in the transaction");
+      return "submitted";
     },
     "0x077f1679",
     ASSET,
-  )) as any[];
+  );
 
-  assert.equal(balanced.length, 3);
-  assert.deepEqual(balanced[1], {
+  assert.equal(result, "submitted");
+  assert.equal(actions.length, 3);
+  assert.deepEqual(actions[1], {
     type: "transfer",
     token: ASSET,
     amount: "0xd2f13f7789f0000",
     recipient: "0x077f1679",
   });
   // The invoke stays last: the pool reads the sink as a plain balancing leg.
-  assert.equal(balanced[2].type, "invoke");
+  assert.equal((actions[2] as any).type, "invoke");
+});
+
+test("the balanced list is the one the operation actually ran with", async () => {
+  // The caller must never have to guess which variant succeeded: a sink
+  // measured against a stale note set is exactly the bug this returns to fix.
+  const terms = parsePaymentRequired(body(), OPTIONS);
+  let seen: unknown[] = [];
+  let call = 0;
+
+  const { actions } = await balanceSurplus(
+    buildPaywallActions(terms),
+    async (candidate) => {
+      seen = candidate;
+      if (call++ === 0) throw new Error("Surplus of 5 found in the transaction");
+    },
+    "0x1",
+    ASSET,
+  );
+  assert.deepEqual(actions, seen);
+});
+
+test("successive rejections accumulate sinks rather than replacing them", async () => {
+  // Each rejection reports what is still unaccounted for given the sinks
+  // already present, so the amounts add up rather than supersede each other.
+  const terms = parsePaymentRequired(body(), OPTIONS);
+  const surpluses = ["Surplus of 100 found", "Surplus of 25 found"];
+  let call = 0;
+
+  const { actions } = await balanceSurplus(
+    buildPaywallActions(terms),
+    async () => {
+      if (call < surpluses.length) throw new Error(surpluses[call++]);
+    },
+    "0x1",
+    ASSET,
+  );
+
+  assert.equal(actions.length, 4);
+  assert.equal((actions[1] as any).amount, "0x64");
+  assert.equal((actions[2] as any).amount, "0x19");
+  assert.equal((actions[3] as any).type, "invoke");
 });
 
 test("a rejection that is not about surplus is not retried", async () => {
@@ -204,14 +246,14 @@ test("an unbalanceable surplus gives up rather than looping", async () => {
       "0x1",
       ASSET,
     ),
-    /Could not balance the note surplus in 3 attempts/,
+    /Could not balance the note surplus in 4 attempts/,
   );
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
 });
 
 test("no surplus means the action list is left alone", async () => {
   const terms = parsePaymentRequired(body(), OPTIONS);
   const base = buildPaywallActions(terms);
-  const balanced = await balanceSurplus(base, async () => {}, "0x1", ASSET);
-  assert.deepEqual(balanced, base);
+  const { actions } = await balanceSurplus(base, async () => {}, "0x1", ASSET);
+  assert.deepEqual(actions, base);
 });

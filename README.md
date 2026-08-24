@@ -198,6 +198,33 @@ After `wallet_status` reports `ready`, the local agent can call `pay` automatica
 
 Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to 10.0.2, which predates the STRK20 API.
 
+### The paywall loop
+
+The two halves, connected. `merchant/` is a paywalled site that takes anonymous
+payment; `scripts/pay-paywall.mjs` is the agent side that settles a 402.
+
+```bash
+npm run start:merchant                  # http://127.0.0.1:8788
+npm run pay:paywall -- http://127.0.0.1:8788/article/agent-privacy --dry
+npm run pay:paywall -- http://127.0.0.1:8788/article/agent-privacy
+```
+
+The merchant answers 402 with x402-shaped terms, the payer withdraws the price
+to the anonymizer and calls `privacy_invoke` in one pool transaction, and the
+merchant verifies the `PaywallPaid` receipt on-chain before unlocking. The
+merchant learns that it was paid and nothing else: the pool is the caller and
+the helper is the sender of record, so no payer appears anywhere.
+
+Proven on Sepolia in
+[`0x604e2104…`](https://sepolia.voyager.online/tx/0x604e2104c397a22a78a200a4a05884308131a7bb19385a7af05185900dd9d13):
+the merchant went from 0.05 to 0.1 STRK, the helper was left holding nothing,
+and the receipt unlocked the article. Redeeming it a second time is refused,
+and it does not unlock any other article.
+
+The payer refuses a 402 that names an anonymizer it does not trust — `invoke`
+calls that contract while holding the money — and refuses a price above the
+ceiling it was given.
+
 ### Pool console
 
 `npm run dev` and open [`/pool`](http://localhost:3000/pool). It connects a
