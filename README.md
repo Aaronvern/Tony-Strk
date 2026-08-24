@@ -198,6 +198,22 @@ After `wallet_status` reports `ready`, the local agent can call `pay` automatica
 
 Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to 10.0.2, which predates the STRK20 API.
 
+### Wallet capability probe
+
+`/spike/wallet` is the ladder that found the wall. Run it against Ready on
+Sepolia and it reports, rung by rung, which STRK20 actions the wallet accepts:
+`deposit`, `withdraw`, and `transfer` with a concrete amount, but **not**
+`transfer` with amount `"OPEN"` and **not** `invoke` — each refused with a bare
+`INVALID_REQUEST_PAYLOAD` that names no cause.
+
+That is the central constraint on this project. Our anonymizer cannot be
+reached on mainnet by any route available to us: the SDK path has no published
+mainnet prover, and the wallet path has no `invoke`. The contract is real,
+tested and deployed — the ecosystem cannot call it there yet.
+
+It is kept runnable because a negative result nobody can reproduce is
+indistinguishable from not having tried.
+
 ### The paywall loop
 
 **An agent can now do this by itself.** The MCP server exposes `pay_paywall`:
