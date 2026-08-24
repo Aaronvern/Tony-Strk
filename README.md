@@ -198,6 +198,23 @@ After `wallet_status` reports `ready`, the local agent can call `pay` automatica
 
 Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to 10.0.2, which predates the STRK20 API.
 
+### Pool console
+
+`npm run dev` and open [`/pool`](http://localhost:3000/pool). It connects a
+privacy-enabled wallet and runs the three STRK20 pool operations — shield,
+private transfer, unshield — keeping every transaction hash with explorer links
+for the submission record in [`docs/TRANSACTIONS.md`](docs/TRANSACTIONS.md).
+
+The page follows whichever network the wallet is on, so the same route
+rehearses on Sepolia and then runs on mainnet. Dry-run each step first: proving
+is free, and the pool charges its flat fee on submission whether or not the
+operation succeeds (6 STRK per operation on mainnet, read live from
+`get_fee_amount`).
+
+It deliberately does not touch our anonymizer. `invoke` is the one STRK20
+action Ready rejects today, so a page that needed it could not run on mainnet
+at all — see [`docs/HANDOFF.md`](docs/HANDOFF.md).
+
 ### Scripts
 
 | Script | Purpose |
