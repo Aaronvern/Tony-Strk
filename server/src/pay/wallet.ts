@@ -1,4 +1,5 @@
 import type { PayWallet } from "./pay.ts";
+import { resolveOhttp } from "./ohttp.ts";
 
 export interface WalletEnv {
   privateKey?: string;
@@ -12,9 +13,16 @@ export interface WalletEnv {
   token: string;
   passphrase: string;
   chainId: string;
-  /** OHTTP relay. Without one, OHTTP is confidentiality but not unlinkability. */
-  ohttpRelayUrl?: string;
   ohttpEnabled: boolean;
+  /** Relay fronting the proving gateway. */
+  ohttpProverRelayUrl?: string;
+  /** Relay fronting the discovery gateway. */
+  ohttpDiscoveryRelayUrl?: string;
+  /** Pinned key-config bytes (hex) so `/ohttp-keys` is never fetched. */
+  ohttpProverKeyConfig?: string;
+  ohttpDiscoveryKeyConfig?: string;
+  /** Deprecated: one relay cannot correctly front both gateways. */
+  ohttpRelayUrl?: string;
 }
 
 /**
@@ -50,14 +58,10 @@ export async function createWallet(env: WalletEnv): Promise<PayWallet | null> {
   const provingBlock = (await node.getBlockNumber()) - 12;
 
   // OHTTP encapsulates proving and discovery traffic so the operator of those
-  // services reads neither request nor response. Note that the IP-blinding
-  // property comes from the relay/gateway split - with no relay this is
-  // confidentiality only. See docs/THREAT-MODEL.md 3.5.
-  const ohttp: boolean | { relayUrl: string } = env.ohttpEnabled
-    ? env.ohttpRelayUrl
-      ? { relayUrl: env.ohttpRelayUrl }
-      : true
-    : false;
+  // services reads neither request nor response. Each gateway needs its own
+  // relay, and a relay without a pinned key config still leaks the IP on the
+  // `/ohttp-keys` fetch. See server/src/pay/ohttp.ts and docs/THREAT-MODEL.md 3.5.
+  const ohttp = resolveOhttp(env);
 
   let registry: unknown;
   const storage = {
@@ -73,13 +77,13 @@ export async function createWallet(env: WalletEnv): Promise<PayWallet | null> {
     passphrase: env.passphrase,
     node,
     discovery: new sdk.IndexerDiscoveryProvider(env.indexerUrl, env.pool, {
-      ohttp,
+      ohttp: ohttp.discovery,
     }),
     prover: new sdk.ProvingServiceProofProvider(env.provingUrl, env.chainId, {
       nodeUrl: env.rpcUrl,
       poolAddress: env.pool,
       blockIdentifier: { block_number: provingBlock },
-      ohttp,
+      ohttp: ohttp.prover,
     }),
     poolContractAddress: env.pool,
     shadowAccountAnonymizerAddress: "0x0",
