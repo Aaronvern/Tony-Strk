@@ -10,7 +10,8 @@ URLs through Tor for any MCP client (Claude, Cursor, …).
 > The web sees the suit. Nobody sees the man inside.
 
 1. **Browse** — a Tor-routed HTTP fetcher. Sites see an exit relay, not your IP or your device.
-2. **Pay** — an experimental STRK20 testnet path. The local process keeps its key in the macOS Keychain.
+2. **Pay a paywall** — the agent hits a 402, settles it through the STRK20 pool, and reads the
+   page. The site learns it was paid and cannot learn by whom.
 
 You need both. An agent that browses anonymously and then pays from a wallet with a public history has just leaked everything it spent the last ten minutes protecting.
 
@@ -24,7 +25,8 @@ AI agents are starting to spend money on your behalf. Today that means every pur
 
 So the more autonomous your agent becomes, **the more of your life becomes a public log.**
 
-The active server makes public, logged-out HTTP fetching private from the destination at the IP layer. The broader payment design is still experimental.
+The active server closes both channels for one concrete flow: an agent reads a paywalled page
+without the site learning either its IP or its identity. On Sepolia, end to end, in one tool call.
 
 ---
 
@@ -32,24 +34,41 @@ The active server makes public, logged-out HTTP fetching private from the destin
 
 ```
    AI agent (MCP client)
-            │
+            │  browse · pay_paywall
             ▼
    ┌──────────────────────┐
-   │  Tony Stark server   │   browse · optional pay
+   │  Tony Strk server    │  local-only, loopback
    └──────────┬───────────┘
-       ┌──────┴───────┐
-       ▼              ▼
- Tor HTTP fetcher  Opt-in wallet path
-       │            STRK20 shielded
-       │            pool (ZK-STARK)
-       │              │
-       ▼              ▼
-   the website    STRK20 pool
+       ┌──────┴───────────────────┐
+       ▼                          ▼
+  Tor HTTP fetch            STRK20 shielded pool
+       │                          │  withdraw → privacy_invoke
+       ▼                          ▼
+  the paywalled site  ◄──────  anonymizer helper
+       │      pays the merchant, emits PaywallPaid
+       │
+       └─► verifies the receipt on-chain, unlocks the page
 ```
 
-**What works now:** the agent asks to browse → the loopback-only server validates a public URL → a stateless HTTP request goes through Tor → the site sees a Tor exit instead of the host IP → the server returns a bounded text response. There is no browser worker, persistent browsing session, or direct-network fallback.
+**What works now, proven on-chain rather than asserted:** the agent calls
+`pay_paywall` with a URL → the server fetches it through Tor → the site answers
+402 with its terms → the server checks the named helper is one it trusts and the
+price is under its ceiling → the pool withdraws exactly the price to the helper
+and calls `privacy_invoke` in a single transaction → the helper pays the merchant
+and emits a public receipt → the server re-fetches with that receipt → the
+merchant verifies it against the chain and returns the page.
 
-`pay` is an experimental local path. It cannot spend until you create, fund, and deploy the local wallet.
+The merchant ends up paid, holding no identity. The payer appears nowhere in the
+transaction: the pool is the caller and the helper is the sender of record.
+
+Watch it happen in
+[`0x37e3d5ad…`](https://sepolia.voyager.online/tx/0x37e3d5ad03efa7a4ef0890d16685f8808ae3160270827506aca83eda967c5a2)
+— 23 seconds, merchant 0.1 → 0.125 STRK, helper left holding nothing.
+
+Both `pay` and `pay_paywall` refuse until a spending key is available — the macOS
+Keychain, or `ACCOUNT_PRIVATE_KEY` in the environment where there is no Keychain.
+`pay_paywall` is not even registered unless `PAYWALL_ANONYMIZER_ADDRESS` names a
+helper contract you have chosen to trust.
 
 ---
 
@@ -91,39 +110,47 @@ Not a mixer. STRK20 screens every deposit against sanctions lists before a proof
 
 ## Status
 
-Building in public, daily. Honest state:
+Building in public, daily. Honest state — nothing is listed as working before it is.
 
-**The active local server keeps payments disabled by default.** It exposes the wallet steps first. It can pay only after the local wallet is ready.
+**Proven** (verified on-chain or by a passing test):
 
-- [x] Feasibility spikes — toolchain, SDK, hosted infra all verified ([`docs/SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md))
-- [x] Responsive Web2 demo with an honest, local-only route preview
-- [x] **Headless STRK20 wallet API proven** — all four privacy methods driven from pure Node, no browser
-- [x] Live hosted prover + discovery verified; advertised OHTTP key matches the SDK repo's pinned config (availability only, not local configuration)
-- [x] Privacy pool addresses recovered and verified on-chain, both networks
-- [x] **Anonymous browsing proven end-to-end** — local MCP → Tor returns `{"IsTor":true}` from the Tor Project's own API
-- [x] Sepolia account funded (faucet script) and **deployed** — can sign
-- [x] **Real ZK proof from StarkWare's hosted prover** — `apply_actions`, proof facts present
-- [x] **Submission via the AVNU paymaster** — proven transaction accepted on-chain
-- [x] 🎉 **Shielded deposit landed, sanctions screening passed** — [`0x3e74d5…`](https://sepolia.starkscan.co/tx/0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349)
-- [ ] Private transfer ← *next (pool is funded)*
-- [ ] MCP server + `balance` / `topup`
-- [ ] Payment loop + STRK20 paywall + gasless settlement
-- [ ] Anonymous browsing worker
-- [ ] **Mainnet**
-- [ ] Viewing-key `reveal`
+- [x] **Anonymous browsing** — local MCP → Tor returns `{"IsTor":true}` from the Tor Project's own API
+- [x] **A real ZK proof** from StarkWare's hosted prover, submitted via the AVNU paymaster
+- [x] **Shielded deposit, sanctions screening passed** — [`0x3e74d5…`](https://sepolia.starkscan.co/tx/0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349)
+- [x] **The anonymizer contract** — 17 tests including two hostile ERC20s (fee-on-transfer, re-entrant), deployed, and settling a real payment
+- [x] **A paywall that takes anonymous payment** — merchant verifies a `PaywallPaid` receipt from the chain and never learns who paid
+- [x] **The agent does it alone** — `pay_paywall` over MCP: browse → 402 → settle → read, in [`0x37e3d5ad…`](https://sepolia.voyager.online/tx/0x37e3d5ad03efa7a4ef0890d16685f8808ae3160270827506aca83eda967c5a2)
+- [x] **Wallet-driven pool operations** — shield and unshield through Ready, from [`/pool`](#pool-console)
+- [x] 149 tests — web 11, server 84, merchant 37, Cairo 17
 
-Nothing here is presented as working before it is. Devnet is never shown as mainnet.
+**Not done:**
+
+- [ ] **Mainnet pool transactions** — `strk20.json` is still empty
+- [ ] Demo video
+- [ ] A permanent public deployment of the merchant
+- [ ] External audit of the Cairo contract
+
+**Blocked, and not by us.** The paywall runs on Sepolia only. Our anonymizer
+cannot be reached on mainnet by any route currently available: the SDK path has
+no published mainnet prover, and the wallet path does not implement `invoke` —
+see [`/spike/wallet`](#wallet-capability-probe), which demonstrates exactly that.
+The contract is real, tested and deployed; the ecosystem cannot call it there
+yet. Mainnet activity is therefore plain pool operations, not paywall payments,
+and this README does not pretend otherwise.
 
 ---
 
 ## Layout
 
-Two packages, on purpose:
+Three packages, on purpose:
 
 | | | |
 |---|---|---|
-| `server/` | the MCP server | Express, local-only, with a Tor HTTP fetcher |
-| `web/` | the landing page | Next.js, static, on Vercel |
+| `server/` | the MCP server | Express, local-only, with a Tor HTTP fetcher and the paywall settler |
+| `web/` | the landing page | Next.js, static, on Vercel — plus the pool console and the wallet probe |
+| `merchant/` | a paywalled site | Express. A separate party on purpose: it is what the agent pays |
+
+`contracts/` holds the Cairo anonymizer (Scarb + Starknet Foundry).
 
 TypeScript runs directly on Node 24's type stripping, so there is no build step for the server.
 
