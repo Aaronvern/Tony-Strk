@@ -36,6 +36,8 @@ wants. Contract deploys and helper spikes come from `scripts/spikes/`.
 
 | 2026-08-22 | **Paywall payment through the pool** — `privacy_invoke` paid the merchant 0.05 STRK, change to an open note, receipt emitted | `0x94c9a56632651bff50ae2e5096394de0c96e1f405900d1c82e1a27e5882cf5` | [view](https://sepolia.voyager.online/tx/0x94c9a56632651bff50ae2e5096394de0c96e1f405900d1c82e1a27e5882cf5) | [view](https://sepolia.starkscan.co/tx/0x94c9a56632651bff50ae2e5096394de0c96e1f405900d1c82e1a27e5882cf5) |
 | 2026-08-22 | Shield 10 STRK (funded the payment above) | `0xd005d4d9ed0f0f0f9a92f9231ae4ed1c88e03d24333c370a404ecce618a7ec` | [view](https://sepolia.voyager.online/tx/0xd005d4d9ed0f0f0f9a92f9231ae4ed1c88e03d24333c370a404ecce618a7ec) | [view](https://sepolia.starkscan.co/tx/0xd005d4d9ed0f0f0f9a92f9231ae4ed1c88e03d24333c370a404ecce618a7ec) |
+| 2026-08-24 | Shield 12 STRK to fund the paywall loop end-to-end | `0x53f037498c5a7c6c3bde495c0cbbac83b69dda27e03ab15c0642de42ea7fec5` | [view](https://sepolia.voyager.online/tx/0x53f037498c5a7c6c3bde495c0cbbac83b69dda27e03ab15c0642de42ea7fec5) | [view](https://sepolia.starkscan.co/tx/0x53f037498c5a7c6c3bde495c0cbbac83b69dda27e03ab15c0642de42ea7fec5) |
+| 2026-08-24 | **The full loop** — agent hit a 402, settled it anonymously through the pool, and the merchant unlocked on the on-chain receipt. Merchant 0.05 → 0.1 STRK, helper left empty | `0x604e2104c397a22a78a200a4a05884308131a7bb19385a7af05185900dd9d13` | [view](https://sepolia.voyager.online/tx/0x604e2104c397a22a78a200a4a05884308131a7bb19385a7af05185900dd9d13) | [view](https://sepolia.starkscan.co/tx/0x604e2104c397a22a78a200a4a05884308131a7bb19385a7af05185900dd9d13) |
 
 ## Mainnet
 

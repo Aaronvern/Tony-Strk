@@ -10,7 +10,8 @@
   },
   "workspaces": [
     "web",
-    "server"
+    "server",
+    "merchant"
   ],
   "scripts": {
     "dev": "npm run dev --workspace @tony-strk/web",
@@ -26,7 +27,10 @@
     "paymaster:set": "node scripts/set-avnu-key.mjs",
     "spike:wallet": "node scripts/spikes/mock-wallet-spike.mjs",
     "spike:services": "node scripts/spikes/check-services.mjs",
-    "setup": "bash scripts/setup-sdk.sh"
+    "setup": "bash scripts/setup-sdk.sh",
+    "start:merchant": "npm run start --workspace @tony-strk/merchant",
+    "dev:merchant": "npm run dev --workspace @tony-strk/merchant",
+    "pay:paywall": "node --env-file-if-exists=.env scripts/pay-paywall.mjs"
   },
   "dependencies": {
     "@starkware-libs/starknet-privacy-client": "file:vendor/starknet-privacy/client",
