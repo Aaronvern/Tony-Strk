@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { browse, type BrowseDeps } from "../tools/browse.ts";
 import { pay, type PayDeps } from "../pay/pay.ts";
+import { settlePaywall, type SettleDeps } from "../pay/settle.ts";
 
 interface WalletToolDeps {
   status(): Promise<Record<string, unknown>>;
@@ -10,7 +11,12 @@ interface WalletToolDeps {
   deploy(): Promise<Record<string, unknown>>;
 }
 
-export type ServerDeps = BrowseDeps & { pay?: PayDeps; wallet?: WalletToolDeps };
+export type ServerDeps = BrowseDeps & {
+  pay?: PayDeps;
+  wallet?: WalletToolDeps;
+  /** Absent when the deployment has no spending key or no trusted helper. */
+  settle?: Omit<SettleDeps, keyof BrowseDeps>;
+};
 
 /**
  * Build the Tony Strk MCP server.
@@ -146,6 +152,61 @@ export function createServer(deps: ServerDeps): McpServer {
             {
               type: "text" as const,
               text: `Paid ${amount} STRK to ${result.recipient}. ${result.explorerUrl}`,
+            },
+          ],
+          structuredContent: result,
+        };
+      },
+    );
+  }
+
+  if (deps.settle) {
+    server.registerTool(
+      "pay_paywall",
+      {
+        title: "Pay a paywall and read the page",
+        description:
+          "Fetch a URL through Tor; if it answers 402, settle the payment " +
+          "anonymously through the STRK20 pool and return the unlocked page. " +
+          "The site learns it was paid and cannot learn by whom. Refuses a 402 " +
+          "that names a helper contract this wallet does not trust, or a price " +
+          "above the configured ceiling. Costs real money — use browse instead " +
+          "to look without paying.",
+        inputSchema: {
+          url: z.string().describe("The http(s) URL to read, paying if it asks."),
+          maxPriceWei: z
+            .string()
+            .optional()
+            .describe(
+              "Lower the price ceiling for this call, in the token's smallest " +
+                "unit. It can only tighten the configured ceiling, never raise it.",
+            ),
+        },
+        outputSchema: {
+          url: z.string(),
+          status: z.number(),
+          title: z.string(),
+          paymentRequired: z.boolean(),
+          paid: z.boolean().describe("True when this call actually spent money."),
+          transactionHash: z.string().optional(),
+          explorerUrl: z.string().optional(),
+          amountWei: z.string().optional().describe("What was paid, in wei."),
+          description: z.string().optional().describe("What the merchant said it was selling."),
+          text: z.string(),
+        },
+      },
+      async ({ url, maxPriceWei }) => {
+        const result = await settlePaywall(
+          { url, maxPrice: maxPriceWei === undefined ? undefined : BigInt(maxPriceWei) },
+          { ...deps, ...deps.settle! },
+        );
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: result.paid
+                ? `Paid ${result.amountWei} wei for "${result.description}". ${result.explorerUrl}\n\n${result.text}`
+                : result.text,
             },
           ],
           structuredContent: result,

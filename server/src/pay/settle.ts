@@ -1,0 +1,141 @@
+import { browse, type BrowseDeps, type BrowseResult } from "../tools/browse.ts";
+import type { PayWallet } from "./pay.ts";
+import {
+  balanceSurplus,
+  buildPaywallActions,
+  parsePaymentRequired,
+  type PaymentTerms,
+} from "./paywall.ts";
+
+/**
+ * Settle a 402 and read what was behind it.
+ *
+ * Both fetches go through `browse`, which means the paid retry inherits every
+ * guard the first request had: the Tor requirement, the SSRF policy, redirect
+ * re-validation, and the body size cap. A paid re-fetch that skipped those
+ * would be the obvious hole — pay once, then get talked into fetching
+ * something private with the receipt in hand.
+ */
+
+export interface SettleDeps extends BrowseDeps {
+  /** Null when no spending key is available, which is the hosted default. */
+  getWallet: () => Promise<PayWallet | null>;
+  /** The payer's own address — the surplus sink pays back to it. */
+  getPayerAddress: () => Promise<string | undefined>;
+  /** Helper contracts whose 402s this wallet is willing to settle. */
+  trustedAnonymizers: string[];
+  /** Ceiling for a single resource, in the asset's smallest unit. */
+  maxPrice: bigint;
+  asset: string;
+  explorerBase: string;
+  /** Injected so tests do not wait out real confirmation delays. */
+  sleep?: (ms: number) => Promise<void>;
+}
+
+export interface SettleInput {
+  url: string;
+  /** Lower the ceiling for this one call. It can never raise it. */
+  maxPrice?: bigint;
+}
+
+export interface SettleResult extends BrowseResult {
+  paid: boolean;
+  transactionHash?: string;
+  explorerUrl?: string;
+  amountWei?: string;
+  description?: string;
+}
+
+/** How long to keep retrying while the merchant cannot see the payment yet. */
+const CONFIRM_ATTEMPTS = 8;
+const CONFIRM_DELAY_MS = 5_000;
+
+export async function settlePaywall(
+  input: SettleInput,
+  deps: SettleDeps,
+): Promise<SettleResult> {
+  const first = await browse({ url: input.url }, deps);
+  if (first.status !== 402) {
+    // Nothing to pay for. Hand back what was fetched rather than treating a
+    // free page as an error.
+    return { ...first, paid: false };
+  }
+
+  let body: unknown;
+  try {
+    body = JSON.parse(first.text);
+  } catch {
+    throw new Error(
+      `${input.url} answered 402 but its body is not JSON payment terms, so there is ` +
+        "nothing to settle.",
+    );
+  }
+
+  // A per-call ceiling may only tighten the configured one. Otherwise the
+  // guard would be advisory: anything able to call this tool could raise it.
+  const ceiling =
+    input.maxPrice === undefined
+      ? deps.maxPrice
+      : input.maxPrice < deps.maxPrice
+        ? input.maxPrice
+        : deps.maxPrice;
+
+  const terms: PaymentTerms = parsePaymentRequired(body, {
+    trustedAnonymizers: deps.trustedAnonymizers,
+    maxPrice: ceiling,
+    asset: deps.asset,
+    requestedUrl: input.url,
+  });
+
+  const wallet = await deps.getWallet();
+  if (!wallet) {
+    throw new Error(
+      `${input.url} wants ${terms.amount} of ${terms.asset}, but no spending key is ` +
+        "available locally. Call wallet_status to create, fund, and deploy the wallet.",
+    );
+  }
+
+  const payer = await deps.getPayerAddress();
+  if (!payer) {
+    throw new Error("Refusing to pay: the local wallet has no address yet.");
+  }
+
+  const { result } = await balanceSurplus(
+    buildPaywallActions(terms),
+    (actions) => wallet.strk20InvokeTransaction(actions),
+    payer,
+    terms.asset,
+  );
+  const transactionHash = result.transaction_hash;
+  const explorerUrl = `${deps.explorerBase}/tx/${transactionHash}`;
+  const settled = {
+    paid: true,
+    transactionHash,
+    explorerUrl,
+    amountWei: terms.amount.toString(),
+    description: terms.description,
+  };
+
+  const sleep = deps.sleep ?? ((ms: number) => new Promise((done) => setTimeout(done, ms)));
+
+  // The merchant checks the chain, so it cannot see the payment until the
+  // transaction is in a block. A 402 here means "not yet", not "refused".
+  for (let attempt = 0; ; attempt++) {
+    const paid = await browse(
+      { url: input.url, headers: { "X-Payment": transactionHash } },
+      deps,
+    );
+    if (paid.status !== 402) return { ...paid, ...settled };
+
+    if (attempt >= CONFIRM_ATTEMPTS - 1) {
+      // Lead with the hash. The money is gone either way, and a caller that
+      // loses the receipt has no way to claim what it bought.
+      throw new Error(
+        `Paid ${terms.amount} in ${transactionHash} (${explorerUrl}), but ${input.url} still ` +
+          `answers 402 after ${CONFIRM_ATTEMPTS} attempts. Keep that hash — retry the URL ` +
+          `with the X-Payment header rather than paying again. Last response: ${paid.text.slice(0, 300)}`,
+      );
+    }
+    await sleep(CONFIRM_DELAY_MS);
+  }
+}

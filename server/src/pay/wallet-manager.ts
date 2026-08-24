@@ -38,14 +38,16 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
     if (!secret) return { secret: null, account: null, deployed: false, balanceWei: 0n };
 
     const account = createCounterfactualAccount(secret.privateKey, secret.passphrase);
-    const deployed = await node.getClassHashAt(account.address).then(() => true).catch(() => false);
+    // An imported account names its own address; a created one derives it.
+    const address = secret.address ?? account.address;
+    const deployed = await node.getClassHashAt(address).then(() => true).catch(() => false);
     const balance = await node.callContract({
       contractAddress: options.token,
       entrypoint: "balanceOf",
-      calldata: [account.address],
+      calldata: [address],
     });
     const balanceWei = BigInt(balance[0]) + (BigInt(balance[1]) << 128n);
-    return { secret, account, deployed, balanceWei };
+    return { secret, account, address, deployed, balanceWei };
   }
 
   async function status(): Promise<WalletStatus> {
@@ -57,7 +59,7 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
         state.balanceWei,
         Boolean(paymasterKey),
       ),
-      ...(state.account ? { address: state.account.address, balanceWei: state.balanceWei.toString() } : {}),
+      ...(state.address ? { address: state.address, balanceWei: state.balanceWei.toString() } : {}),
     };
   }
 
@@ -78,6 +80,12 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
         throw new Error("Create a wallet before deployment.");
       }
       if (current.deployed) return status();
+      if (current.secret.address) {
+        throw new Error(
+          "That account was imported rather than created here, so this server cannot deploy " +
+            "it. Deploy it from the wallet that owns it.",
+        );
+      }
       if (current.balanceWei === 0n) {
         throw new Error(`Fund ${current.account.address} before deployment.`);
       }
@@ -110,7 +118,7 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
       return createWallet({
         ...options,
         privateKey: current.secret.privateKey,
-        address: current.account.address,
+        address: current.address,
         passphrase: current.secret.passphrase,
         avnuApiKey: paymasterKey ?? undefined,
       });

@@ -8,6 +8,17 @@ export interface BrowseInput {
   url: string;
   /** Return the response body untouched instead of readable text. */
   raw?: boolean;
+  /**
+   * Extra request headers.
+   *
+   * Deliberately NOT exposed in the MCP input schema. Letting an agent set
+   * arbitrary headers on an arbitrary host is a capability of its own — it
+   * could forge a Host, replay a bearer token, or smuggle credentials to a
+   * destination the user never authorised. The only caller that sets this is
+   * the paywall settlement, which sends one receipt header to the one URL that
+   * just asked for payment.
+   */
+  headers?: Record<string, string>;
 }
 
 export interface BrowseDeps {
@@ -16,7 +27,13 @@ export interface BrowseDeps {
   /** Injected so tests can drive the tool without a live circuit. */
   fetchImpl: (
     target: string,
-    options: { proxy: string; address: string; redirect: "manual"; signal: AbortSignal },
+    options: {
+      proxy: string;
+      address: string;
+      redirect: "manual";
+      signal: AbortSignal;
+      headers?: Record<string, string>;
+    },
   ) => Response | Promise<Response>;
 }
 
@@ -56,6 +73,7 @@ export async function browse(
       address,
       redirect: "manual",
       signal: AbortSignal.timeout(15_000),
+      headers: input.headers,
     });
     const location = response.headers.get("location");
     if (!location || response.status < 300 || response.status >= 400) break;

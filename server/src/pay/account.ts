@@ -7,6 +7,15 @@ export const READY_ACCOUNT_CLASS_HASH =
 export interface WalletSecret {
   privateKey: string;
   passphrase: string;
+  /**
+   * The account this key controls, when it is not one we derived.
+   *
+   * A wallet we create is counterfactual: its address falls out of the key. An
+   * account the user already has — imported into Ready, deployed months ago —
+   * does not, so the address has to travel with the key or we would compute a
+   * different, empty account and report it as unfunded.
+   */
+  address?: string;
 }
 
 export interface CounterfactualAccount extends WalletSecret {

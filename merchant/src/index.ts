@@ -1,6 +1,7 @@
 import { RpcProvider } from "starknet";
 
 import { createMerchantApp } from "./app.ts";
+import { createFileStore } from "./store.ts";
 
 const port = Number(process.env.MERCHANT_PORT ?? 8788);
 const host = process.env.MERCHANT_HOST ?? "127.0.0.1";
@@ -29,6 +30,10 @@ const asset =
 
 const provider = new RpcProvider({ nodeUrl: rpcUrl });
 
+// Spent receipts must survive a restart. PaywallPaid is public, so a forgotten
+// spent set means anyone watching the pool reads every article for free.
+const store = await createFileStore(process.env.MERCHANT_STORE ?? ".merchant-state.json");
+
 const app = createMerchantApp({
   payTo,
   anonymizer,
@@ -37,6 +42,15 @@ const app = createMerchantApp({
   fetchReceipt: (txHash) => provider.getTransactionReceipt(txHash),
   explorerBase:
     network === "mainnet" ? "https://voyager.online" : "https://sepolia.voyager.online",
+  store,
+  // Set when something in front terminates TLS — a tunnel, a load balancer, a
+  // platform router. Without it the 402 advertises http:// terms for an https://
+  // request and a careful payer refuses them.
+  trustProxy: process.env.MERCHANT_TRUST_PROXY
+    ? /^\d+$/.test(process.env.MERCHANT_TRUST_PROXY)
+      ? Number(process.env.MERCHANT_TRUST_PROXY)
+      : process.env.MERCHANT_TRUST_PROXY
+    : undefined,
 });
 
 app.listen(port, host, () => {

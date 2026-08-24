@@ -28,3 +28,6 @@ vendor/
 # Cairo build output
 contracts/target/
 .snfoundry_cache/
+
+# Merchant spent-receipt and grant state.
+.merchant-state.json
