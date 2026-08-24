@@ -39,7 +39,15 @@ const wallet = createWalletManager({
   pool: POOL,
   token: TOKEN,
   chainId: network === "mainnet" ? "SN_MAIN" : "SN_SEPOLIA",
-  ohttpEnabled: false,
+  // Off until real relay, gateway and key-config values exist: encryption
+  // without an independently operated relay is confidentiality, not anonymity.
+  // Opt in explicitly once they do.
+  ohttpEnabled: process.env.OHTTP_ENABLED === "true",
+  ohttpProverRelayUrl: process.env.OHTTP_PROVER_RELAY_URL,
+  ohttpDiscoveryRelayUrl: process.env.OHTTP_DISCOVERY_RELAY_URL,
+  ohttpProverKeyConfig: process.env.OHTTP_PROVER_KEY_CONFIG,
+  ohttpDiscoveryKeyConfig: process.env.OHTTP_DISCOVERY_KEY_CONFIG,
+  ohttpRelayUrl: process.env.OHTTP_RELAY_URL,
 });
 
 const payDeps = {
