@@ -1,0 +1,23 @@
+{
+  "name": "@tony-strk/merchant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A paywalled site that takes anonymous STRK20 payments.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=../.env src/index.ts",
+    "dev": "node --env-file-if-exists=../.env --watch src/index.ts",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "starknet": "^10.7.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6"
+  }
+}
