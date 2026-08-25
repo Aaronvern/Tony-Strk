@@ -74,7 +74,9 @@ async function requiredFor(h: ReturnType<typeof harness>, path = `/article/${SLU
   const header = res.headers.get("PAYMENT-REQUIRED");
   assert.ok(header, "missing PAYMENT-REQUIRED");
   const required = decode(header) as Json;
-  assert.deepEqual(body, required);
+  assert.deepEqual(body, { error: "payment required" });
+  assert.equal("accepts" in body, false);
+  assert.equal("resource" in body, false);
   return { required, header };
 }
 
@@ -273,14 +275,41 @@ test("a transaction that is not readable returns a pending PAYMENT-RESPONSE", as
   });
 });
 
+test("a readable receipt with pending finality returns a pending PAYMENT-RESPONSE", async (t) => {
+  const h = harness({
+    fetchReceipt: async () => ({ ...receiptFor(SLUG), finality_status: "RECEIVED" }),
+  });
+  t.after(h.close);
+
+  const challenge = await fetch(h.url(`/article/${SLUG}`));
+  const required = decode(challenge.headers.get("PAYMENT-REQUIRED")!);
+  const res = await fetch(h.url(`/article/${SLUG}`), {
+    headers: { "PAYMENT-SIGNATURE": payloadFor(required) },
+  });
+  assert.equal(res.status, 402);
+  const responseHeader = res.headers.get("PAYMENT-RESPONSE");
+  assert.ok(responseHeader, "missing PAYMENT-RESPONSE");
+  assert.deepEqual(decode(responseHeader), {
+    success: false,
+    errorReason: "settlement_pending",
+    transaction: "0xabc123",
+    network: NETWORK,
+  });
+});
+
 test("a valid event from a different transaction does not unlock the article", async (t) => {
   const h = harness({
-    fetchReceipt: async () => ({ ...receiptFor(SLUG), transaction_hash: "0xdef456" }),
+    fetchReceipt: async () => ({
+      ...receiptFor(SLUG),
+      transaction_hash: "0xdef456",
+      finality_status: "RECEIVED",
+    }),
   });
   t.after(h.close);
 
   const res = await paid(h);
   assert.equal(res.status, 402);
+  assert.equal(res.headers.get("PAYMENT-RESPONSE"), null);
   assert.match((await res.json()).error, /transaction hash/);
 });
 

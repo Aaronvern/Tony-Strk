@@ -91,6 +91,14 @@ const sameFelt = (value: unknown, expected: string) => {
   }
 };
 
+const PENDING_FINALITY = new Set(["PENDING", "RECEIVED", "NOT_RECEIVED"]);
+
+const isPendingReceipt = (receipt: ChainReceipt, txHash: string) =>
+  sameFelt(receipt.transaction_hash, txHash) &&
+  (receipt.execution_status === "PENDING" ||
+    receipt.execution_status === "RECEIVED" ||
+    (receipt.execution_status === "SUCCEEDED" && PENDING_FINALITY.has(receipt.finality_status ?? "")));
+
 /** Transaction hashes are field elements, same as everything else on Starknet. */
 const isTxHash = (value: unknown): value is string =>
   typeof value === "string" && /^0x[0-9a-fA-F]{1,64}$/.test(value.trim());
@@ -204,7 +212,7 @@ export function createMerchantApp(deps: MerchantDeps) {
     if (!payment) {
       const required = terms(article, req);
       res.setHeader("PAYMENT-REQUIRED", encode(required));
-      res.status(402).json(required);
+      res.status(402).json({ error: "payment required" });
       return;
     }
 
@@ -273,6 +281,11 @@ export function createMerchantApp(deps: MerchantDeps) {
       // Not found is the common case: the payer retried before the
       // transaction was in a block. That is worth distinguishing from a
       // rejection, because the fix is to wait rather than to pay again.
+      pending(res, txHash);
+      return;
+    }
+
+    if (isPendingReceipt(receipt, txHash)) {
       pending(res, txHash);
       return;
     }
