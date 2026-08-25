@@ -31,6 +31,7 @@ export interface ChainEvent {
 }
 
 export interface ChainReceipt {
+  transaction_hash?: string;
   execution_status?: string;
   finality_status?: string;
   events?: ChainEvent[];
@@ -81,7 +82,15 @@ const ACCEPTED = new Set(["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"]);
  * Decide whether a receipt satisfies the terms. Pure, so it can be tested
  * against a real on-chain receipt rather than a hand-built object.
  */
-export function verifyReceipt(receipt: ChainReceipt, terms: PaywallTerms): Verdict {
+export function verifyReceipt(
+  receipt: ChainReceipt,
+  terms: PaywallTerms,
+  expectedTransactionHash: string,
+): Verdict {
+  if (!sameFelt(receipt.transaction_hash ?? "", expectedTransactionHash)) {
+    return { ok: false, reason: "receipt transaction hash does not match submitted transaction hash" };
+  }
+
   if (receipt.execution_status !== "SUCCEEDED") {
     return {
       ok: false,

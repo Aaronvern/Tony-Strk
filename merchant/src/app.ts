@@ -177,7 +177,7 @@ export function createMerchantApp(deps: MerchantDeps) {
       resourceHash: resourceHash(article.slug),
       asset: deps.asset,
       minPrice: article.price,
-    });
+    }, txHash);
 
     if (!verdict.ok) {
       res.status(402).json({

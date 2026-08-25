@@ -24,6 +24,7 @@ const PRICE = 50_000_000_000_000_000n;
  * HTTP protocol on top: what unlocks, what is refused, and what can be reused.
  */
 const receiptFor = (slug: string, price = PRICE): ChainReceipt => ({
+  transaction_hash: "0xabc123",
   execution_status: "SUCCEEDED",
   finality_status: "ACCEPTED_ON_L2",
   events: [
@@ -95,6 +96,17 @@ test("a verified receipt unlocks the article and returns an access token", async
   const token = res.headers.get("x-access-token");
   assert.ok(token, "no access token issued");
   assert.equal(res.headers.get("x-payment-verified"), `${PRICE} ${ASSET}`);
+});
+
+test("a valid event from a different transaction does not unlock the article", async (t) => {
+  const h = harness({
+    fetchReceipt: async () => ({ ...receiptFor(SLUG), transaction_hash: "0xdef456" }),
+  });
+  t.after(h.close);
+
+  const res = await fetch(h.url(`/article/${SLUG}`), { headers: { "X-Payment": "0xabc123" } });
+  assert.equal(res.status, 402);
+  assert.match((await res.json()).error, /transaction hash/);
 });
 
 test("concurrent redemption of one receipt grants access only once", async (t) => {

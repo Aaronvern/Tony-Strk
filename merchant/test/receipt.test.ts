@@ -15,6 +15,7 @@ import type { ChainReceipt, PaywallTerms } from "../src/receipt.ts";
 const settlement = JSON.parse(
   readFileSync(new URL("./settlement-receipt.json", import.meta.url), "utf8"),
 ) as ChainReceipt;
+const SETTLEMENT_HASH = "0x94c9a56632651bff50ae2e5096394de0c96e1f405900d1c82e1a27e5882cf5";
 
 const TERMS: PaywallTerms = {
   anonymizer: "0x767a1daf3503e51882e88f6d4f1ef510517895ed0c91f8847bbf85eb9d389d",
@@ -29,19 +30,25 @@ test("the selector matches the one the deployed contract actually emitted", () =
 });
 
 test("a real settlement verifies", () => {
-  const verdict = verifyReceipt(settlement, TERMS);
+  const verdict = verifyReceipt(settlement, TERMS, SETTLEMENT_HASH);
   assert.equal(verdict.ok, true);
   assert.equal(verdict.ok && verdict.price, 50_000_000_000_000_000n);
 });
 
+test("a receipt returned for a different transaction hash is refused", () => {
+  const verdict = verifyReceipt(settlement, TERMS, "0xdeadbeef");
+  assert.equal(verdict.ok, false);
+  assert.match(verdict.ok === false ? verdict.reason : "", /transaction hash/);
+});
+
 test("a receipt above the advertised fixed price is refused", () => {
-  const verdict = verifyReceipt(settlement, { ...TERMS, minPrice: 10_000_000_000_000_000n });
+  const verdict = verifyReceipt(settlement, { ...TERMS, minPrice: 10_000_000_000_000_000n }, SETTLEMENT_HASH);
   assert.equal(verdict.ok, false);
   assert.match(verdict.ok === false ? verdict.reason : "", /price/);
 });
 
 test("a receipt below the asking price is refused", () => {
-  const verdict = verifyReceipt(settlement, { ...TERMS, minPrice: 50_000_000_000_000_001n });
+  const verdict = verifyReceipt(settlement, { ...TERMS, minPrice: 50_000_000_000_000_001n }, SETTLEMENT_HASH);
   assert.equal(verdict.ok, false);
   assert.match(verdict.ok === false ? verdict.reason : "", /asking price/);
 });
@@ -50,21 +57,21 @@ test("addresses compare as field elements, not as strings", () => {
   // Same merchant, written with a leading zero the way some explorers print it.
   const padded = "0x04d45524348414e54";
   assert.notEqual(padded, TERMS.merchant);
-  assert.equal(verifyReceipt(settlement, { ...TERMS, merchant: padded }).ok, true);
+  assert.equal(verifyReceipt(settlement, { ...TERMS, merchant: padded }, SETTLEMENT_HASH).ok, true);
 
   // And the anonymizer, zero-padded to a full 64 hex digits.
   const wide = "0x00767a1daf3503e51882e88f6d4f1ef510517895ed0c91f8847bbf85eb9d389d";
-  assert.equal(verifyReceipt(settlement, { ...TERMS, anonymizer: wide }).ok, true);
+  assert.equal(verifyReceipt(settlement, { ...TERMS, anonymizer: wide }, SETTLEMENT_HASH).ok, true);
 });
 
 test("a receipt for another merchant does not unlock this one", () => {
-  const verdict = verifyReceipt(settlement, { ...TERMS, merchant: "0x1234" });
+  const verdict = verifyReceipt(settlement, { ...TERMS, merchant: "0x1234" }, SETTLEMENT_HASH);
   assert.equal(verdict.ok, false);
   assert.match(verdict.ok === false ? verdict.reason : "", /no PaywallPaid receipt/);
 });
 
 test("a receipt for another resource does not unlock this one", () => {
-  const verdict = verifyReceipt(settlement, { ...TERMS, resourceHash: "0x9999" });
+  const verdict = verifyReceipt(settlement, { ...TERMS, resourceHash: "0x9999" }, SETTLEMENT_HASH);
   assert.equal(verdict.ok, false);
   assert.match(verdict.ok === false ? verdict.reason : "", /no PaywallPaid receipt/);
 });
@@ -77,25 +84,25 @@ test("an event from a contract we do not trust is ignored", () => {
     ...settlement,
     events: (settlement.events ?? []).map((event) => ({ ...event, from_address: "0xbadc0de" })),
   };
-  assert.equal(verifyReceipt(impostor, TERMS).ok, false);
+  assert.equal(verifyReceipt(impostor, TERMS, SETTLEMENT_HASH).ok, false);
 });
 
 test("a receipt paid in the wrong token is refused", () => {
-  const verdict = verifyReceipt(settlement, { ...TERMS, asset: "0xdeadbeef" });
+  const verdict = verifyReceipt(settlement, { ...TERMS, asset: "0xdeadbeef" }, SETTLEMENT_HASH);
   assert.equal(verdict.ok, false);
   assert.match(verdict.ok === false ? verdict.reason : "", /wrong token/);
 });
 
 test("a reverted transaction is refused even if it carries events", () => {
   const reverted: ChainReceipt = { ...settlement, execution_status: "REVERTED" };
-  const verdict = verifyReceipt(reverted, TERMS);
+  const verdict = verifyReceipt(reverted, TERMS, SETTLEMENT_HASH);
   assert.equal(verdict.ok, false);
   assert.match(verdict.ok === false ? verdict.reason : "", /did not succeed/);
 });
 
 test("a receipt without execution status is refused", () => {
   const { execution_status: _executionStatus, ...missing } = settlement;
-  const verdict = verifyReceipt(missing, TERMS);
+  const verdict = verifyReceipt(missing, TERMS, SETTLEMENT_HASH);
   assert.equal(verdict.ok, false);
   assert.match(verdict.ok === false ? verdict.reason : "", /did not succeed/);
 });
@@ -103,15 +110,15 @@ test("a receipt without execution status is refused", () => {
 test("a transaction that is not in a block yet is refused", () => {
   for (const finality of ["RECEIVED", "PRE_CONFIRMED", undefined]) {
     const pending: ChainReceipt = { ...settlement, finality_status: finality };
-    const verdict = verifyReceipt(pending, TERMS);
+    const verdict = verifyReceipt(pending, TERMS, SETTLEMENT_HASH);
     assert.equal(verdict.ok, false, `accepted finality ${finality}`);
     assert.match(verdict.ok === false ? verdict.reason : "", /not in a block yet/);
   }
 });
 
 test("a receipt with no events at all is refused", () => {
-  assert.equal(verifyReceipt({ ...settlement, events: [] }, TERMS).ok, false);
-  assert.equal(verifyReceipt({ ...settlement, events: undefined }, TERMS).ok, false);
+  assert.equal(verifyReceipt({ ...settlement, events: [] }, TERMS, SETTLEMENT_HASH).ok, false);
+  assert.equal(verifyReceipt({ ...settlement, events: undefined }, TERMS, SETTLEMENT_HASH).ok, false);
 });
 
 test("a malformed event cannot crash the verifier", () => {
@@ -124,7 +131,7 @@ test("a malformed event cannot crash the verifier", () => {
       ...(settlement.events ?? []),
     ],
   };
-  assert.equal(verifyReceipt(malformed, TERMS).ok, true);
+  assert.equal(verifyReceipt(malformed, TERMS, SETTLEMENT_HASH).ok, true);
 });
 
 test("a malformed event price is refused without crashing", () => {
@@ -136,6 +143,6 @@ test("a malformed event price is refused without crashing", () => {
       data: [TERMS.asset, "not-a-number"],
     }],
   };
-  assert.doesNotThrow(() => verifyReceipt(malformed, TERMS));
-  assert.equal(verifyReceipt(malformed, TERMS).ok, false);
+  assert.doesNotThrow(() => verifyReceipt(malformed, TERMS, SETTLEMENT_HASH));
+  assert.equal(verifyReceipt(malformed, TERMS, SETTLEMENT_HASH).ok, false);
 });
