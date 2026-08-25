@@ -38,7 +38,7 @@ const app = createMerchantApp({
   payTo,
   anonymizer,
   asset,
-  network: network === "mainnet" ? "starknet-mainnet" : "starknet-sepolia",
+  network: network === "mainnet" ? "starknet:SN_MAIN" : "starknet:SN_SEPOLIA",
   fetchReceipt: (txHash) => provider.getTransactionReceipt(txHash),
   explorerBase:
     network === "mainnet" ? "https://voyager.online" : "https://sepolia.voyager.online",

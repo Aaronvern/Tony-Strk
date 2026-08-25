@@ -14,7 +14,7 @@ export interface MerchantDeps {
   anonymizer: string;
   /** The token prices are quoted in. */
   asset: string;
-  /** Chain label for the 402 body, e.g. starknet-sepolia. */
+  /** CAIP-2 chain label for x402, e.g. starknet:SN_SEPOLIA. */
   network: string;
   /** Read a transaction receipt from the chain. Injected so tests need no RPC. */
   fetchReceipt: (txHash: string) => Promise<ChainReceipt>;
@@ -45,6 +45,51 @@ export interface MerchantDeps {
 }
 
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
+
+const isRecord = (value: unknown): value is Record<string, any> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const encode = (value: unknown) =>
+  Buffer.from(JSON.stringify(value), "utf8").toString("base64");
+
+/** Decode standard Base64 only when it is canonical and contains JSON. */
+const decode = (value: string): unknown | undefined => {
+  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+    return undefined;
+  }
+  try {
+    const bytes = Buffer.from(value, "base64");
+    if (bytes.toString("base64") !== value) return undefined;
+    return JSON.parse(bytes.toString("utf8"));
+  } catch {
+    return undefined;
+  }
+};
+
+const sameKeys = (value: Record<string, any>, keys: string[]) => {
+  const actual = Object.keys(value).sort();
+  return actual.length === keys.length && actual.every((key, index) => key === [...keys].sort()[index]);
+};
+
+const sameJson = (left: unknown, right: unknown): boolean => {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) &&
+      left.length === right.length && left.every((value, index) => sameJson(value, right[index]));
+  }
+  if (!isRecord(left) || !isRecord(right)) return false;
+  const keys = Object.keys(left);
+  return sameKeys(right, keys) && keys.every((key) => sameJson(left[key], right[key]));
+};
+
+const sameFelt = (value: unknown, expected: string) => {
+  if (typeof value !== "string") return false;
+  try {
+    return BigInt(value) === BigInt(expected);
+  } catch {
+    return false;
+  }
+};
 
 /** Transaction hashes are field elements, same as everything else on Starknet. */
 const isTxHash = (value: unknown): value is string =>
@@ -77,26 +122,51 @@ export function createMerchantApp(deps: MerchantDeps) {
   app.disable("x-powered-by");
   if (deps.trustProxy !== undefined) app.set("trust proxy", deps.trustProxy);
 
-  const terms = (article: Article, req: Request) => ({
-    scheme: "strk20-anonymizer",
-    network: deps.network,
-    maxAmountRequired: article.price.toString(),
-    resource: `${req.protocol}://${req.get("host")}/article/${article.slug}`,
+  const resource = (article: Article, req: Request) => ({
+    url: `${req.protocol}://${req.get("host")}/article/${article.slug}`,
     description: article.title,
     mimeType: "text/html",
+    serviceName: "Ledger & Lantern",
+    tags: ["privacy", "research"],
+  });
+
+  const accepted = (article: Article) => ({
+    scheme: "strk20-anonymizer",
+    network: deps.network,
+    amount: article.price.toString(),
+    asset: deps.asset,
     payTo: deps.payTo,
     maxTimeoutSeconds: 600,
-    asset: deps.asset,
     extra: {
+      assetTransferMethod: "strk20-privacy-invoke",
+      paymentFlow: "upfront",
       anonymizer: deps.anonymizer,
       resourceHash: resourceHash(article.slug),
-      // Named so nobody mistakes this for x402's `exact` scheme, which needs a
-      // signed OutsideExecution from an identified payer and therefore cannot
-      // be anonymous. Same envelope, different settlement.
-      settlement: "Call privacy_invoke on `anonymizer` through the STRK20 pool, " +
-        "then retry with X-Payment: <transaction hash>.",
     },
   });
+
+  const terms = (article: Article, req: Request) => ({
+    x402Version: 2,
+    error: "PAYMENT-SIGNATURE header is required",
+    resource: resource(article, req),
+    accepts: [accepted(article)],
+    extensions: {},
+  });
+
+  const rejectSignature = (res: Response, error: string) => {
+    res.status(400).json({ x402Version: 2, error });
+  };
+
+  const pending = (res: Response, txHash: string) => {
+    const response = {
+      success: false,
+      errorReason: "settlement_pending",
+      transaction: txHash,
+      network: deps.network,
+    };
+    res.setHeader("PAYMENT-RESPONSE", encode(response));
+    res.status(402).json({ x402Version: 2, error: "settlement_pending" });
+  };
 
   app.get("/", (req, res) => {
     res.type("html").send(page(
@@ -130,22 +200,63 @@ export function createMerchantApp(deps: MerchantDeps) {
       }
     }
 
-    const payment = header(req, "x-payment");
+    const payment = header(req, "payment-signature");
     if (!payment) {
-      res.status(402).json({
-        x402Version: 1,
-        error: "payment required",
-        accepts: [terms(article, req)],
-      });
+      const required = terms(article, req);
+      res.setHeader("PAYMENT-REQUIRED", encode(required));
+      res.status(402).json(required);
       return;
     }
 
-    if (!isTxHash(payment)) {
-      res.status(400).json({ error: "X-Payment must be a Starknet transaction hash" });
+    const signature = decode(payment);
+    if (!isRecord(signature)) {
+      rejectSignature(res, "PAYMENT-SIGNATURE must be canonical Base64-encoded JSON");
       return;
     }
 
-    const txHash = payment.trim();
+    if (signature.x402Version !== 2) {
+      rejectSignature(res, "PAYMENT-SIGNATURE x402Version must be 2");
+      return;
+    }
+
+    if (!sameKeys(signature, ["x402Version", "resource", "accepted", "payload", "extensions"]) ||
+      !isRecord(signature.extensions)) {
+      rejectSignature(res, "PAYMENT-SIGNATURE has an invalid v2 shape");
+      return;
+    }
+
+    const required = terms(article, req);
+    const expectedResource = required.resource;
+    const expectedAccepted = required.accepts[0];
+    const candidateResource = signature.resource;
+    const candidateAccepted = signature.accepted;
+    const candidateExtra = isRecord(candidateAccepted?.extra) ? candidateAccepted.extra : undefined;
+    const expectedExtra = expectedAccepted.extra;
+    const acceptedMatches = isRecord(candidateAccepted) &&
+      sameKeys(candidateAccepted, ["scheme", "network", "amount", "asset", "payTo", "maxTimeoutSeconds", "extra"]) &&
+      candidateAccepted.scheme === expectedAccepted.scheme &&
+      candidateAccepted.network === expectedAccepted.network &&
+      sameFelt(candidateAccepted.amount, expectedAccepted.amount) &&
+      sameFelt(candidateAccepted.asset, expectedAccepted.asset) &&
+      sameFelt(candidateAccepted.payTo, expectedAccepted.payTo) &&
+      candidateAccepted.maxTimeoutSeconds === expectedAccepted.maxTimeoutSeconds &&
+      !!candidateExtra && sameKeys(candidateExtra, ["assetTransferMethod", "paymentFlow", "anonymizer", "resourceHash"]) &&
+      candidateExtra.assetTransferMethod === expectedExtra.assetTransferMethod &&
+      candidateExtra.paymentFlow === expectedExtra.paymentFlow &&
+      sameFelt(candidateExtra.anonymizer, expectedExtra.anonymizer) &&
+      sameFelt(candidateExtra.resourceHash, expectedExtra.resourceHash);
+    if (!sameJson(candidateResource, expectedResource) || !acceptedMatches) {
+      rejectSignature(res, "PAYMENT-SIGNATURE does not match the current payment requirements");
+      return;
+    }
+
+    const payload = signature.payload;
+    if (!isRecord(payload) || !sameKeys(payload, ["transactionHash"]) || !isTxHash(payload.transactionHash)) {
+      rejectSignature(res, "PAYMENT-SIGNATURE payload.transactionHash must be a Starknet transaction hash");
+      return;
+    }
+
+    const txHash = payload.transactionHash.trim();
     const key = `${BigInt(txHash).toString(16)}:${article.slug}`;
     if (await store.isSpent(key)) {
       res.status(409).json({
@@ -162,12 +273,7 @@ export function createMerchantApp(deps: MerchantDeps) {
       // Not found is the common case: the payer retried before the
       // transaction was in a block. That is worth distinguishing from a
       // rejection, because the fix is to wait rather than to pay again.
-      res.status(402).json({
-        x402Version: 1,
-        error: "could not read that transaction yet",
-        detail: String((error as Error)?.message ?? error),
-        accepts: [terms(article, req)],
-      });
+      pending(res, txHash);
       return;
     }
 
@@ -181,9 +287,8 @@ export function createMerchantApp(deps: MerchantDeps) {
 
     if (!verdict.ok) {
       res.status(402).json({
-        x402Version: 1,
+        x402Version: 2,
         error: verdict.reason,
-        accepts: [terms(article, req)],
       });
       return;
     }
@@ -198,8 +303,13 @@ export function createMerchantApp(deps: MerchantDeps) {
     const granted = crypto.randomUUID();
     await store.saveGrant(granted, { slug: article.slug, expires: now() + ttl });
 
+    res.setHeader("PAYMENT-RESPONSE", encode({
+      success: true,
+      transaction: txHash,
+      network: deps.network,
+      amount: verdict.price.toString(),
+    }));
     res.setHeader("X-Access-Token", granted);
-    res.setHeader("X-Payment-Verified", `${verdict.price} ${deps.asset}`);
     res.type("html").send(render(article, `${deps.explorerBase}/tx/${txHash}`));
   });
 
