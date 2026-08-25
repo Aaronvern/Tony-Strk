@@ -31,3 +31,6 @@ contracts/target/
 
 # Merchant spent-receipt and grant state.
 .merchant-state.json
+
+# local feature worktrees
+.worktrees/
