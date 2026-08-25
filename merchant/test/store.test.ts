@@ -14,12 +14,22 @@ async function scratch() {
 test("the memory store round-trips receipts and grants", async () => {
   const store = createMemoryStore();
   assert.equal(await store.isSpent("a"), false);
-  await store.markSpent("a", 1);
+  assert.equal(await store.consumeReceipt("a", 1), true);
   assert.equal(await store.isSpent("a"), true);
+  assert.equal(await store.consumeReceipt("a", 2), false);
 
   await store.saveGrant("tok", { slug: "x", expires: 99 });
   assert.deepEqual(await store.readGrant("tok"), { slug: "x", expires: 99 });
   assert.equal(await store.readGrant("nope"), undefined);
+});
+
+test("concurrent receipt consumption only succeeds once", async () => {
+  const store = createMemoryStore();
+  const results = await Promise.all([
+    store.consumeReceipt("0xabc:slug", 1),
+    store.consumeReceipt("0xabc:slug", 2),
+  ]);
+  assert.deepEqual(results.sort(), [false, true]);
 });
 
 test("a spent receipt survives a restart", async (t) => {
@@ -29,7 +39,7 @@ test("a spent receipt survives a restart", async (t) => {
   t.after(clean);
 
   const first = await createFileStore(path);
-  await first.markSpent("0xabc:agent-privacy", 1000);
+  assert.equal(await first.consumeReceipt("0xabc:agent-privacy", 1000), true);
 
   const afterRestart = await createFileStore(path);
   assert.equal(await afterRestart.isSpent("0xabc:agent-privacy"), true);
@@ -62,7 +72,7 @@ test("overlapping writes do not lose a spent receipt", async (t) => {
 
   const store = await createFileStore(path);
   const keys = Array.from({ length: 40 }, (_, i) => `0x${i}:slug`);
-  await Promise.all(keys.map((key, i) => store.markSpent(key, i)));
+  await Promise.all(keys.map((key, i) => store.consumeReceipt(key, i)));
 
   const onDisk = JSON.parse(await readFile(path, "utf8"));
   assert.equal(Object.keys(onDisk.spent).length, 40);
@@ -92,7 +102,7 @@ test("a spent receipt is never pruned, however old", async (t) => {
   t.after(clean);
 
   const store = await createFileStore(path);
-  await store.markSpent("0xold:slug", 0);
+  assert.equal(await store.consumeReceipt("0xold:slug", 0), true);
   await store.saveGrant("a", { slug: "x", expires: Date.now() - 1 });
   await store.saveGrant("b", { slug: "y", expires: Date.now() + 60_000 });
 

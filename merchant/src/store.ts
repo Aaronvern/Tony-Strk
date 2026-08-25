@@ -22,7 +22,7 @@ export interface Grant {
 
 export interface ReceiptStore {
   isSpent(key: string): Promise<boolean>;
-  markSpent(key: string, at: number): Promise<void>;
+  consumeReceipt(key: string, at: number): Promise<boolean>;
   saveGrant(token: string, grant: Grant): Promise<void>;
   readGrant(token: string): Promise<Grant | undefined>;
 }
@@ -33,7 +33,11 @@ export function createMemoryStore(): ReceiptStore {
   const grants = new Map<string, Grant>();
   return {
     isSpent: async (key) => spent.has(key),
-    markSpent: async (key, at) => void spent.set(key, at),
+    consumeReceipt: async (key, at) => {
+      if (spent.has(key)) return false;
+      spent.set(key, at);
+      return true;
+    },
     saveGrant: async (token, grant) => void grants.set(token, grant),
     readGrant: async (token) => grants.get(token),
   };
@@ -71,11 +75,14 @@ export async function createFileStore(path: string): Promise<ReceiptStore> {
     return queue;
   };
 
+  // ponytail: single-process atomicity via one global mutex; upgrade to per-receipt locks or a database unique constraint before multi-instance deployment.
   return {
     isSpent: async (key) => key in snapshot.spent,
-    markSpent: async (key, at) => {
+    consumeReceipt: async (key, at) => {
+      if (key in snapshot.spent) return false;
       snapshot.spent[key] = at;
       await flush();
+      return true;
     },
     saveGrant: async (token, grant) => {
       // Drop grants that have already expired, so the file cannot grow without

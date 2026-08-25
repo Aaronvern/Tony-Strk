@@ -97,6 +97,17 @@ test("a verified receipt unlocks the article and returns an access token", async
   assert.equal(res.headers.get("x-payment-verified"), `${PRICE} ${ASSET}`);
 });
 
+test("concurrent redemption of one receipt grants access only once", async (t) => {
+  const h = harness();
+  t.after(h.close);
+
+  const responses = await Promise.all([
+    fetch(h.url(`/article/${SLUG}`), { headers: { "X-Payment": "0xabc123" } }),
+    fetch(h.url(`/article/${SLUG}`), { headers: { "X-Payment": "0xabc123" } }),
+  ]);
+  assert.deepEqual(responses.map((response) => response.status).sort((a, b) => a - b), [200, 409]);
+});
+
 test("the access token reads again without paying again", async (t) => {
   const h = harness();
   t.after(h.close);

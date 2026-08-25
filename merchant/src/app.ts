@@ -188,7 +188,13 @@ export function createMerchantApp(deps: MerchantDeps) {
       return;
     }
 
-    await store.markSpent(key, now());
+    if (!(await store.consumeReceipt(key, now()))) {
+      res.status(409).json({
+        error: "that receipt has already been redeemed",
+        hint: "Keep the access token from the first redemption, or pay again.",
+      });
+      return;
+    }
     const granted = crypto.randomUUID();
     await store.saveGrant(granted, { slug: article.slug, expires: now() + ttl });
 

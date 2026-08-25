@@ -82,8 +82,11 @@ const ACCEPTED = new Set(["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"]);
  * against a real on-chain receipt rather than a hand-built object.
  */
 export function verifyReceipt(receipt: ChainReceipt, terms: PaywallTerms): Verdict {
-  if (receipt.execution_status && receipt.execution_status !== "SUCCEEDED") {
-    return { ok: false, reason: `transaction did not succeed (${receipt.execution_status})` };
+  if (receipt.execution_status !== "SUCCEEDED") {
+    return {
+      ok: false,
+      reason: `transaction did not succeed (${receipt.execution_status ?? "missing execution status"})`,
+    };
   }
 
   const finality = receipt.finality_status ?? "";
@@ -118,9 +121,14 @@ export function verifyReceipt(receipt: ChainReceipt, terms: PaywallTerms): Verdi
   for (const event of receipts) {
     if (event.data.length < 2) continue;
     if (!sameFelt(event.data[0], terms.asset)) continue;
-    const price = BigInt(event.data[1]);
-    if (price >= terms.minPrice) return { ok: true, price, finality };
+    let price: bigint;
+    try {
+      price = BigInt(event.data[1]);
+    } catch {
+      continue;
+    }
+    if (price === terms.minPrice) return { ok: true, price, finality };
   }
 
-  return { ok: false, reason: "the receipt is for the wrong token or below the asking price" };
+  return { ok: false, reason: "the receipt is for the wrong token or does not exactly match the asking price" };
 }
