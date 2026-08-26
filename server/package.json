@@ -12,7 +12,8 @@
     "start": "node --env-file-if-exists=../.env src/index.ts",
     "dev": "node --env-file-if-exists=../.env --watch src/index.ts",
     "test": "node --test \"test/**/*.test.ts\"",
-    "verify:mcp": "node verify-mcp.mjs"
+    "verify:mcp": "node verify-mcp.mjs",
+    "verify:x402": "node verify-x402.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
