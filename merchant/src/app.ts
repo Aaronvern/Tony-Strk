@@ -91,7 +91,7 @@ const sameFelt = (value: unknown, expected: string) => {
   }
 };
 
-const PENDING_FINALITY = new Set(["PENDING", "RECEIVED", "NOT_RECEIVED"]);
+const PENDING_FINALITY = new Set(["PENDING", "RECEIVED", "PRE_CONFIRMED", "NOT_RECEIVED"]);
 
 const isPendingReceipt = (receipt: ChainReceipt, txHash: string) =>
   sameFelt(receipt.transaction_hash, txHash) &&

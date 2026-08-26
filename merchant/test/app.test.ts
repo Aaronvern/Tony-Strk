@@ -297,6 +297,28 @@ test("a readable receipt with pending finality returns a pending PAYMENT-RESPONS
   });
 });
 
+test("a readable PRE_CONFIRMED receipt returns a pending PAYMENT-RESPONSE", async (t) => {
+  const h = harness({
+    fetchReceipt: async () => ({ ...receiptFor(SLUG), finality_status: "PRE_CONFIRMED" }),
+  });
+  t.after(h.close);
+
+  const challenge = await fetch(h.url(`/article/${SLUG}`));
+  const required = decode(challenge.headers.get("PAYMENT-REQUIRED")!);
+  const res = await fetch(h.url(`/article/${SLUG}`), {
+    headers: { "PAYMENT-SIGNATURE": payloadFor(required) },
+  });
+  assert.equal(res.status, 402);
+  const responseHeader = res.headers.get("PAYMENT-RESPONSE");
+  assert.ok(responseHeader, "missing PAYMENT-RESPONSE");
+  assert.deepEqual(decode(responseHeader), {
+    success: false,
+    errorReason: "settlement_pending",
+    transaction: "0xabc123",
+    network: NETWORK,
+  });
+});
+
 test("a valid event from a different transaction does not unlock the article", async (t) => {
   const h = harness({
     fetchReceipt: async () => ({
