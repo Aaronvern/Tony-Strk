@@ -48,3 +48,37 @@ test("setup page uses scoped responsive styles and accessible code labels", asyn
   assert.match(css, /@media/);
   assert.match(css, /:focus-visible/);
 });
+
+test("setup page points verification at a paid article resource", async () => {
+  const page = await readFile(pagePath, "utf8");
+
+  assert.match(page, /https:\/\/<your-tunnel-host>\/article\/agent-privacy/);
+  assert.doesNotMatch(page, /PUBLIC_HTTPS_MERCHANT_URL/);
+  assert.match(page, /paid resource|paid article|article\/agent-privacy/i);
+});
+
+test("setup page makes the helper environment usable for both services", async () => {
+  const page = await readFile(pagePath, "utf8");
+
+  assert.match(page, /gitignored[^.]*\.env|\.env[^\n]*gitignored/i);
+  assert.match(page, /export|place .*\.env/i);
+  assert.match(page, /same[\s\S]*PAYWALL_ANONYMIZER_ADDRESS/i);
+  assert.match(page, /server and merchant/i);
+});
+
+test("setup page fences off the legacy payer's raw-key requirements", async () => {
+  const page = await readFile(pagePath, "utf8");
+
+  assert.match(page, /legacy\/manual maintenance|manual.*legacy|legacy.*manual/i);
+  for (const name of [
+    "ACCOUNT_ADDRESS",
+    "ACCOUNT_PRIVATE_KEY",
+    "AVNU_API_KEY",
+    "HELPER_ADDRESS",
+    "POOL_ADDRESS",
+  ]) {
+    assert.match(page, new RegExp(name));
+  }
+  assert.match(page, /Keychain[^.\n]*(?:does not|not).*provide|not[^.\n]*Keychain[^.\n]*provide/i);
+  assert.match(page, /recommended[^.\n]*MCP verifier|MCP verifier[^.\n]*recommended/i);
+});

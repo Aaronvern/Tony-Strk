@@ -99,14 +99,22 @@ npm run setup`)}
               lookup used by <code>wallet_status</code>; an explicit RPC may
               override it.
             </p>
-            {block('Non-secret Sepolia settings', `PAYWALL_ANONYMIZER_ADDRESS=YOUR_TRUSTED_HELPER_ADDRESS
+            <p>
+              Place these non-secret settings in the repository&apos;s gitignored
+              <code>.env</code> file, or export them in both the server and
+              merchant shells. The server and merchant must use the same helper
+              address from <code>PAYWALL_ANONYMIZER_ADDRESS</code>; without it,
+              <code>pay_paywall</code> is not registered on the server.
+            </p>
+            {block('Shared non-secret Sepolia settings for .env', `PAYWALL_ANONYMIZER_ADDRESS=YOUR_TRUSTED_HELPER_ADDRESS
 PAYWALL_MAX_PRICE=0.5
 STARKNET_RPC_URL=https://starknet-sepolia-rpc.publicnode.com
 TOR_SOCKS_PROXY=socks5://127.0.0.1:9050`)}
             <p className={styles.note}>
               Keep API keys and wallet material in the macOS Keychain. The
               settings above are addresses, limits, and service URLs, not
-              credentials.
+              credentials. The merchant reads the same <code>.env</code> when
+              started from this repository.
             </p>
           </section>
         </li>
@@ -124,22 +132,34 @@ TOR_SOCKS_PROXY=socks5://127.0.0.1:9050`)}
             {block('Merchant and Cloudflare Quick Tunnel', `MERCHANT_TRUST_PROXY=1 npm run start:merchant
 cloudflared tunnel --url http://127.0.0.1:8788`)}
             <p>
-              Copy the tunnel&apos;s <code>https://</code> URL and use it as the
-              merchant URL. The MCP correctly rejects localhost for merchant
-              payment requests because Tor cannot reach a local listener.
+              Copy the tunnel&apos;s <code>https://</code> host and append
+              <code>/article/agent-privacy</code>. Use the full paid resource
+              URL, for example
+              <code>https://&lt;your-tunnel-host&gt;/article/agent-privacy</code>;
+              the merchant&apos;s root index is free and does not exercise the
+              402 flow. The MCP correctly rejects localhost for merchant payment
+              requests because Tor cannot reach a local listener.
             </p>
             {block('Local MCP server', 'TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server')}
             <details className={styles.details}>
-              <summary>Local script versus the real MCP flow</summary>
+              <summary>Legacy script versus the recommended MCP flow</summary>
               <p>
-                The standalone script is a direct localhost check. It is useful
-                for rehearsing the payer without the MCP URL policy:
+                The standalone <code>scripts/pay-paywall.mjs</code> is a
+                legacy/manual maintenance path, not part of the Keychain setup
+                and not the recommended verifier. It requires separate raw-key
+                environment values: <code>ACCOUNT_ADDRESS</code>,
+                <code>ACCOUNT_PRIVATE_KEY</code>, <code>AVNU_API_KEY</code>,
+                <code>HELPER_ADDRESS</code>, and <code>POOL_ADDRESS</code>.
+                The Keychain setup does not provide these raw-key variables, so
+                this command is not compatible with it. Do not put literal keys
+                in this page; use a private, gitignored <code>.env</code> only
+                for manual maintenance of this legacy script.
               </p>
-              {block('Direct localhost payer (separate path)', 'npm run pay:paywall -- http://127.0.0.1:8788/article/agent-privacy --dry')}
+              {block('Direct localhost payer (separate legacy path)', 'npm run pay:paywall -- http://127.0.0.1:8788/article/agent-privacy --dry')}
               <p>
-                The real flow is <code>pay_paywall</code> through the local MCP,
-                and therefore requires the public HTTPS tunnel URL. It uses Tor
-                for both the unpaid and signed requests.
+                The recommended path is the MCP verifier below: it uses the
+                Keychain wallet setup, the public HTTPS paid resource URL, and
+                Tor for both the unpaid and signed requests.
               </p>
             </details>
           </section>
@@ -172,8 +192,8 @@ cloudflared tunnel --url http://127.0.0.1:8788`)}
             </p>
             {block('Deterministic and preflight checks', `npm test
 npm run verify:mcp
-npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL`)}
-            {block('Opt-in live x402 payment', 'npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live')}
+npm run verify:x402 -- --url https://<your-tunnel-host>/article/agent-privacy`)}
+            {block('Opt-in live x402 payment', 'npm run verify:x402 -- --url https://<your-tunnel-host>/article/agent-privacy --live')}
             <p className={styles.note}>
               A successful live run reports <code>paid: true</code>, HTTP 200,
               the settlement transaction hash, an explorer URL, and protected
