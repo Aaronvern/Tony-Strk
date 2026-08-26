@@ -10,6 +10,7 @@ import {
 import type { KeychainStore, PaymasterKeyStore } from "./keychain.ts";
 import { createWallet, type WalletEnv } from "./wallet.ts";
 import type { PayWallet } from "./pay.ts";
+import { toWei } from "./amount.ts";
 
 export interface WalletStatus {
   state: WalletState;
@@ -18,20 +19,37 @@ export interface WalletStatus {
   transactionHash?: string;
 }
 
+export interface WalletShieldResult {
+  transactionHash: string;
+  amountWei: string;
+  explorerUrl: string;
+  receiptBlock: number;
+  spendableAfterBlock: number;
+}
+
 export interface WalletManager {
   status(): Promise<WalletStatus>;
   create(): Promise<WalletStatus>;
   deploy(): Promise<WalletStatus>;
   getPayWallet(): Promise<PayWallet | null>;
+  shield(amount: string): Promise<WalletShieldResult>;
 }
 
 interface WalletManagerOptions extends Omit<WalletEnv, "privateKey" | "address" | "passphrase" | "avnuApiKey"> {
   store: KeychainStore;
   paymaster: PaymasterKeyStore;
+  explorerBase?: string;
+  /** Test seams; production loads the wallet and waits through the manager. */
+  wallet?: PayWallet | null;
+  waitForTransaction?: (transactionHash: string) => Promise<{ block_number: number }>;
 }
 
 export function createWalletManager(options: WalletManagerOptions): WalletManager {
   const node = new RpcProvider({ nodeUrl: options.rpcUrl });
+  const waitForTransaction =
+    options.waitForTransaction ??
+    (async (transactionHash: string) =>
+      (await node.waitForTransaction(transactionHash)) as { block_number: number });
 
   async function accountState() {
     const secret = await options.store.load();
@@ -61,6 +79,26 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
       ),
       ...(state.address ? { address: state.address, balanceWei: state.balanceWei.toString() } : {}),
     };
+  }
+
+  async function getPayWallet() {
+    const [current, paymasterKey] = await Promise.all([accountState(), options.paymaster.load()]);
+    const state = determineWalletState(
+      Boolean(current.secret),
+      current.deployed,
+      current.balanceWei,
+      Boolean(paymasterKey),
+    );
+    if (state !== "ready" || !current.secret || !current.account) {
+      throw new Error(`Wallet ${state}. Call wallet_status for the required action.`);
+    }
+    return createWallet({
+      ...options,
+      privateKey: current.secret.privateKey,
+      address: current.address,
+      passphrase: current.secret.passphrase,
+      avnuApiKey: paymasterKey ?? undefined,
+    });
   }
 
   return {
@@ -104,24 +142,34 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
       await node.waitForTransaction(deployment.transaction_hash);
       return { ...(await status()), transactionHash: deployment.transaction_hash };
     },
-    async getPayWallet() {
-      const [current, paymasterKey] = await Promise.all([accountState(), options.paymaster.load()]);
-      const state = determineWalletState(
-        Boolean(current.secret),
-        current.deployed,
-        current.balanceWei,
-        Boolean(paymasterKey),
-      );
-      if (state !== "ready" || !current.secret || !current.account) {
-        throw new Error(`Wallet ${state}. Call wallet_status for the required action.`);
+    getPayWallet,
+    async shield(amount) {
+      const amountWei = toWei(amount);
+      const wallet = options.wallet === undefined ? await getPayWallet() : options.wallet;
+      if (!wallet) {
+        throw new Error(
+          "Refusing to shield: no spending key is available locally. Call wallet_status " +
+            "to create, fund, and deploy the local wallet.",
+        );
       }
-      return createWallet({
-        ...options,
-        privateKey: current.secret.privateKey,
-        address: current.address,
-        passphrase: current.secret.passphrase,
-        avnuApiKey: paymasterKey ?? undefined,
-      });
+
+      const { transaction_hash } = await wallet.strk20InvokeTransaction([
+        {
+          type: "deposit",
+          token: options.token,
+          amount: `0x${amountWei.toString(16)}`,
+        },
+      ]);
+      const receipt = await waitForTransaction(transaction_hash);
+      const receiptBlock = receipt.block_number;
+
+      return {
+        transactionHash: transaction_hash,
+        amountWei: amountWei.toString(),
+        explorerUrl: `${options.explorerBase ?? "https://sepolia.starkscan.co"}/tx/${transaction_hash}`,
+        receiptBlock,
+        spendableAfterBlock: receiptBlock + 12,
+      };
     },
   };
 }

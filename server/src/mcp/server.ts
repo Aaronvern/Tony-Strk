@@ -9,6 +9,7 @@ interface WalletToolDeps {
   status(): Promise<Record<string, unknown>>;
   create(): Promise<Record<string, unknown>>;
   deploy(): Promise<Record<string, unknown>>;
+  shield(amount: string): Promise<Record<string, unknown>>;
 }
 
 export type ServerDeps = BrowseDeps & {
@@ -117,6 +118,44 @@ export function createServer(deps: ServerDeps): McpServer {
         const result = await deps.wallet!.deploy();
         return {
           content: [{ type: "text" as const, text: JSON.stringify(result) }],
+          structuredContent: result,
+        };
+      },
+    );
+
+    server.registerTool(
+      "wallet_shield",
+      {
+        title: "Shield public test STRK",
+        description:
+          "Shield public test STRK from this wallet into the STRK20 pool. This spends " +
+          "public test STRK; the resulting private note has a 12-block maturity and needs " +
+          "12 blocks before it is spendable. It does not pay a merchant automatically. " +
+          "Use wallet_status first.",
+        inputSchema: {
+          amount: z
+            .string()
+            .describe('Amount of public Sepolia test STRK to shield, e.g. "1.5".'),
+        },
+        outputSchema: {
+          transactionHash: z.string(),
+          amountWei: z.string(),
+          explorerUrl: z.string(),
+          receiptBlock: z.number(),
+          spendableAfterBlock: z.number(),
+        },
+      },
+      async ({ amount }) => {
+        const result = await deps.wallet!.shield(amount);
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text:
+                `Shielded ${result.amountWei} wei. Spendable after block ` +
+                `${result.spendableAfterBlock}. ${result.explorerUrl}`,
+            },
+          ],
           structuredContent: result,
         };
       },

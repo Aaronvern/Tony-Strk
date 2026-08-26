@@ -32,6 +32,8 @@ const TOKEN =
   process.env.STRK_TOKEN_ADDRESS ??
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 const network = process.env.NETWORK ?? "sepolia";
+const explorerBase =
+  network === "mainnet" ? "https://starkscan.co" : "https://sepolia.starkscan.co";
 
 // The Keychain is the right default and exists only on macOS. Where the
 // environment names a key instead, use it — and the env store says loudly that
@@ -41,7 +43,7 @@ const fromEnv = envWalletConfigured(process.env);
 const wallet = createWalletManager({
   store: fromEnv ? createEnvWalletStore(process.env) : createKeychainStore(),
   paymaster: fromEnv ? createEnvPaymasterStore(process.env) : createPaymasterKeyStore(),
-  rpcUrl: process.env.STARKNET_RPC_URL ?? "https://starknet-sepolia.drpc.org",
+  rpcUrl: process.env.STARKNET_RPC_URL ?? "https://starknet-sepolia-rpc.publicnode.com",
   provingUrl:
     process.env.PROVING_SERVICE_URL ??
     "https://transaction-prover.alpha-sepolia.sw-dev.io",
@@ -51,6 +53,7 @@ const wallet = createWalletManager({
   paymasterUrl: process.env.PAYMASTER_URL ?? "https://sepolia.paymaster.avnu.fi",
   pool: POOL,
   token: TOKEN,
+  explorerBase,
   // The felt, not the name. The SDK hashes this into the proof request, so the
   // string "SN_SEPOLIA" fails with "Cannot convert SN_SEPOLIA to a BigInt" —
   // and only at spend time, since every test drives a fake wallet.
@@ -72,8 +75,7 @@ const wallet = createWalletManager({
 const payDeps = {
   getWallet: () => wallet.getPayWallet(),
   token: TOKEN,
-  explorerBase:
-    network === "mainnet" ? "https://starkscan.co" : "https://sepolia.starkscan.co",
+  explorerBase,
 };
 
 // Helper contracts whose 402s this wallet will settle. The `invoke` leg hands

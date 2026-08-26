@@ -49,17 +49,44 @@ test("wallet tools tell an MCP client how to prepare automatic payments", async 
       status: async () => ({ state: "needs_funding", address: "0x123" }),
       create: async () => ({ state: "needs_funding", address: "0x123" }),
       deploy: async () => ({ state: "ready", address: "0x123", transactionHash: "0xabc" }),
+      shield: async (amount) => ({
+        transactionHash: "0xshielded",
+        amountWei: amount === "1" ? "1000000000000000000" : "0",
+        explorerUrl: "https://sepolia.starkscan.co/tx/0xshielded",
+        receiptBlock: 100,
+        spendableAfterBlock: 112,
+      }),
     },
   });
 
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name),
-    ["browse", "wallet_status", "wallet_create", "wallet_deploy"],
+    ["browse", "wallet_status", "wallet_create", "wallet_deploy", "wallet_shield"],
   );
 
   const result = await client.callTool({ name: "wallet_status", arguments: {} });
   assert.deepEqual(result.structuredContent, { state: "needs_funding", address: "0x123" });
+
+  const shieldTool = tools.find((tool) => tool.name === "wallet_shield");
+  assert.match(shieldTool?.description ?? "", /public test STRK/i);
+  assert.match(shieldTool?.description ?? "", /12 blocks?/i);
+
+  const shieldResult = await client.callTool({
+    name: "wallet_shield",
+    arguments: { amount: "1" },
+  });
+  assert.deepEqual(shieldResult.structuredContent, {
+    transactionHash: "0xshielded",
+    amountWei: "1000000000000000000",
+    explorerUrl: "https://sepolia.starkscan.co/tx/0xshielded",
+    receiptBlock: 100,
+    spendableAfterBlock: 112,
+  });
+  assert.deepEqual(
+    Object.keys(shieldResult.structuredContent as Record<string, unknown>).sort(),
+    ["amountWei", "explorerUrl", "receiptBlock", "spendableAfterBlock", "transactionHash"],
+  );
 });
 
 test("a paywalled page tells the client that payment is required", async () => {
