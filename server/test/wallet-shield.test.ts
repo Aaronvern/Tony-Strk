@@ -91,6 +91,15 @@ test("shield validates before loading or submitting the wallet", async () => {
   assert.equal(waited, 0);
 });
 
+test("shield rejects a receipt missing its transaction hash", async () => {
+  const { transaction_hash: _transactionHash, ...missingHash } = receiptFor();
+
+  await assert.rejects(
+    () => manager(fakeWallet(), async () => missingHash).shield("1"),
+    /transaction hash/i,
+  );
+});
+
 test("shield rejects a receipt bound to another transaction", async () => {
   const wallet = fakeWallet();
 

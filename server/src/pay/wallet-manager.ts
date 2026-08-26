@@ -183,9 +183,8 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
         throw new Error("Shield transaction returned a malformed receipt.");
       }
       if (
-        receipt.transaction_hash !== undefined &&
-        (typeof receipt.transaction_hash !== "string" ||
-          (receipt.transaction_hash !== transaction_hash && !sameFelt(receipt.transaction_hash, transaction_hash)))
+        typeof receipt.transaction_hash !== "string" ||
+        (receipt.transaction_hash !== transaction_hash && !sameFelt(receipt.transaction_hash, transaction_hash))
       ) {
         throw new Error("Shield transaction receipt hash does not match the submitted transaction hash.");
       }

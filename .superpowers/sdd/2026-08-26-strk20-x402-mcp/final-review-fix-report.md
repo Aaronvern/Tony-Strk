@@ -207,3 +207,105 @@ Build exited `0`.
 - The existing merchant pending `PAYMENT-RESPONSE` intentionally omits `amount`; the server preserves that wire contract and rejects any supplied mismatched amount. If the protocol later requires amount on pending responses, make that a coordinated merchant/server wire change.
 - Finality acceptance remains intentionally `ACCEPTED_ON_L2` or `ACCEPTED_ON_L1`, matching the existing paywall receipt policy.
 - No live Sepolia transaction or external verifier run was performed, per task scope.
+
+## Fix round 2: require the shield receipt transaction hash
+
+### Verified finding
+
+`wallet-manager.ts` previously entered hash validation only when
+`receipt.transaction_hash !== undefined`. A receipt with a valid status,
+finality, and block number but no transaction hash could therefore report note
+maturity without binding the receipt to the submitted deposit transaction.
+
+### TDD RED
+
+Added `shield rejects a receipt missing its transaction hash` to
+`server/test/wallet-shield.test.ts`, then ran:
+
+```text
+PATH=/Users/pratham/.nvm/versions/node/v24.12.0/bin:$PATH node --test server/test/wallet-shield.test.ts
+```
+
+Exact result: `tests 7`, `pass 6`, `fail 1`. The missing-hash test failed with
+`AssertionError [ERR_ASSERTION]: Missing expected rejection`; existing L1,
+mismatch, reverted/pending/pre-confirmed, and malformed-field tests passed.
+
+### TDD GREEN
+
+Changed the guard to require `transaction_hash` to be a string and felt-equal
+to the submitted hash before status/finality/block validation. Re-ran:
+
+```text
+PATH=/Users/pratham/.nvm/versions/node/v24.12.0/bin:$PATH node --test server/test/wallet-shield.test.ts
+```
+
+Exact result: `tests 7`, `pass 7`, `fail 0`.
+
+### Full-suite evidence
+
+Ran once after the fix:
+
+```text
+PATH=/Users/pratham/.nvm/versions/node/v24.12.0/bin:$PATH npm test
+```
+
+Workspace output summaries:
+
+```text
+@tony-strk/web: tests 16, pass 16, fail 0
+@tony-strk/server: tests 105, pass 105, fail 0
+@tony-strk/merchant: tests 58, pass 58, fail 0
+```
+
+The command exited `0`; total deterministic tests: `179`, with no failures,
+cancellations, or skips.
+
+### Build evidence
+
+Ran once after the fix:
+
+```text
+PATH=/Users/pratham/.nvm/versions/node/v24.12.0/bin:$PATH npm run build
+```
+
+Exact final build output:
+
+```text
+> tony-strk@0.1.0 build
+> npm run build --workspace @tony-strk/web
+
+> @tony-strk/web@0.1.0 build
+> next build
+
+▲ Next.js 16.3.1 (Turbopack)
+✓ Running next.config took 5ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 272ms
+  Running TypeScript ...
+  Finished TypeScript in 2ms ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/6) ...
+  Generating static pages using 7 workers (1/6)
+  Generating static pages using 7 workers (2/6)
+  Generating static pages using 7 workers (4/6)
+✓ Generating static pages using 7 workers (6/6) in 208ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /pool
+├ ○ /setup
+└ ○ /spike/wallet
+
+○  (Static)  prerendered as static content
+```
+
+Build exited `0`.
+
+### Fix-round self-review
+
+- Missing, non-string, and mismatched receipt hashes now throw before maturity is returned.
+- Existing `ACCEPTED_ON_L2`/`ACCEPTED_ON_L1`, execution-status, finality, and block-number guards remain unchanged.
+- No unrelated files, dependencies, live transactions, or secrets were touched.
