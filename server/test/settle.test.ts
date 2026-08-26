@@ -55,18 +55,29 @@ const paywall = (body = termsBody(), withHeader = true) =>
     } : { "content-type": "application/json" },
   });
 
-const unlocked = () =>
+const unlocked = (response = {
+  success: true,
+  transaction: "0xabc123",
+  network: NETWORK,
+  amount: PRICE.toString(),
+}) =>
   new Response("<html><head><title>Paid</title></head><body><p>The article.</p></body></html>", {
     status: 200,
     headers: {
       "content-type": "text/html",
-      "PAYMENT-RESPONSE": encode({
-        success: true,
-        transaction: "0xabc123",
-        network: NETWORK,
-        amount: PRICE.toString(),
-      }),
+      "PAYMENT-RESPONSE": encode(response),
     },
+  });
+
+const pending = (response = {
+  success: false,
+  errorReason: "settlement_pending",
+  transaction: "0xabc123",
+  network: NETWORK,
+}) =>
+  new Response(JSON.stringify({ error: "settlement_pending" }), {
+    status: 402,
+    headers: { "PAYMENT-RESPONSE": encode(response) },
   });
 
 function harness(overrides: Partial<SettleDeps> = {}, body = termsBody()) {
@@ -120,6 +131,108 @@ test("a v2 PAYMENT-REQUIRED challenge is settled and the unlocked page comes bac
   assert.equal(result.amountWei, PRICE.toString());
   assert.equal(result.explorerUrl, "https://sepolia.starkscan.co/tx/0xabc123");
   assert.match(result.text, /The article/);
+  assert.equal(submitted.length, 1);
+});
+
+test("a paid 2xx without PAYMENT-RESPONSE fails with the paid hash", async () => {
+  const { deps, submitted } = harness({
+    fetchImpl: (_target, options) =>
+      options.headers?.["PAYMENT-SIGNATURE"]
+        ? new Response("free", { status: 200 })
+        : paywall(),
+  });
+
+  await assert.rejects(
+    () => settlePaywall({ url: URL }, deps),
+    (error: Error) => {
+      assert.match(error.message, /0xabc123/);
+      return true;
+    },
+  );
+  assert.equal(submitted.length, 1);
+});
+
+test("a paid retry with malformed PAYMENT-RESPONSE fails without polling", async () => {
+  let requests = 0;
+  const { deps, submitted } = harness({
+    fetchImpl: (_target, options) => {
+      requests++;
+      return options.headers?.["PAYMENT-SIGNATURE"]
+        ? new Response("bad", { status: 200, headers: { "PAYMENT-RESPONSE": "not-base64" } })
+        : paywall();
+    },
+  });
+
+  await assert.rejects(() => settlePaywall({ url: URL }, deps), /0xabc123/);
+  assert.equal(requests, 2);
+  assert.equal(submitted.length, 1);
+});
+
+test("a paid retry with mismatched PAYMENT-RESPONSE fails without polling", async () => {
+  let requests = 0;
+  const { deps, submitted } = harness({
+    fetchImpl: (_target, options) => {
+      requests++;
+      return options.headers?.["PAYMENT-SIGNATURE"]
+        ? unlocked({
+          success: true,
+          transaction: "0xdeadbeef",
+          network: NETWORK,
+          amount: PRICE.toString(),
+        })
+        : paywall();
+    },
+  });
+
+  await assert.rejects(() => settlePaywall({ url: URL }, deps), /0xabc123/);
+  assert.equal(requests, 2);
+  assert.equal(submitted.length, 1);
+});
+
+test("a paid response must match the advertised network and amount", async () => {
+  for (const response of [
+    { success: true, transaction: "0xabc123", network: "starknet:SN_MAIN", amount: PRICE.toString() },
+    { success: true, transaction: "0xabc123", network: NETWORK, amount: (PRICE + 1n).toString() },
+  ]) {
+    const { deps, submitted } = harness({
+      fetchImpl: (_target, options) =>
+        options.headers?.["PAYMENT-SIGNATURE"] ? unlocked(response) : paywall(),
+    });
+    await assert.rejects(() => settlePaywall({ url: URL }, deps), /0xabc123/);
+    assert.equal(submitted.length, 1);
+  }
+});
+
+test("a paid retry with a 500 fails with the paid hash", async () => {
+  const { deps, submitted } = harness({
+    fetchImpl: (_target, options) =>
+      options.headers?.["PAYMENT-SIGNATURE"]
+        ? new Response("server error", { status: 500 })
+        : paywall(),
+  });
+
+  await assert.rejects(() => settlePaywall({ url: URL }, deps), /0xabc123/);
+  assert.equal(submitted.length, 1);
+});
+
+test("a paid retry with a permanent 402 rejection fails instead of polling", async () => {
+  let requests = 0;
+  const { deps, submitted } = harness({
+    fetchImpl: (_target, options) => {
+      requests++;
+      return options.headers?.["PAYMENT-SIGNATURE"]
+        ? pending({
+          success: false,
+          errorReason: "settlement_rejected",
+          transaction: "0xabc123",
+          network: NETWORK,
+        })
+        : paywall();
+    },
+  });
+
+  await assert.rejects(() => settlePaywall({ url: URL }, deps), /0xabc123/);
+  assert.equal(requests, 2);
   assert.equal(submitted.length, 1);
 });
 
@@ -223,7 +336,7 @@ test("a merchant that cannot see the payment yet is retried, not paid twice", as
     fetchImpl: (_target, options) => {
       look++;
       if (!options.headers?.["PAYMENT-SIGNATURE"]) return paywall();
-      return look < 4 ? paywall() : unlocked();
+      return look < 4 ? pending() : unlocked();
     },
   });
 

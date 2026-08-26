@@ -51,6 +51,50 @@ export interface SettleResult extends BrowseResult {
 const CONFIRM_ATTEMPTS = 8;
 const CONFIRM_DELAY_MS = 5_000;
 const encode = (value: unknown) => Buffer.from(JSON.stringify(value), "utf8").toString("base64");
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const sameFelt = (left: unknown, right: string) => {
+  if (typeof left !== "string") return false;
+  try {
+    return BigInt(left) === BigInt(right);
+  } catch {
+    return false;
+  }
+};
+
+const amountMatches = (value: unknown, expected: bigint) => {
+  if (typeof value !== "string" || !/^\d+$/.test(value)) return false;
+  try {
+    return BigInt(value) === expected;
+  } catch {
+    return false;
+  }
+};
+
+function decodePaymentResponse(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== "string" || !value || !BASE64.test(value)) return undefined;
+  const decoded = Buffer.from(value, "base64");
+  if (decoded.toString("base64") !== value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(decoded.toString("utf8"));
+    return isRecord(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function responseMatches(
+  response: Record<string, unknown>,
+  terms: PaymentTerms,
+  transactionHash: string,
+) {
+  return sameFelt(response.transaction, transactionHash) &&
+    response.network === terms.network &&
+    (response.amount === undefined || amountMatches(response.amount, terms.amount));
+}
 
 export async function settlePaywall(
   input: SettleInput,
@@ -129,7 +173,33 @@ export async function settlePaywall(
       },
       deps,
     );
-    if (paid.status !== 402) return { ...paid, ...settled };
+    const response = decodePaymentResponse(paid.paymentResponseHeader);
+    if (paid.status >= 200 && paid.status < 300) {
+      if (
+        response?.success === true &&
+        amountMatches(response.amount, terms.amount) &&
+        responseMatches(response, terms, transactionHash)
+      ) {
+        return { ...paid, ...settled };
+      }
+      throw new Error(
+        `Paid ${terms.amount} in ${transactionHash} (${explorerUrl}), but the merchant returned ` +
+          "a missing, malformed, or mismatched successful PAYMENT-RESPONSE. Keep that hash — " +
+          "retry the URL with the PAYMENT-SIGNATURE payload rather than paying again.",
+      );
+    }
+    if (
+      paid.status !== 402 ||
+      response?.success !== false ||
+      response.errorReason !== "settlement_pending" ||
+      !responseMatches(response, terms, transactionHash)
+    ) {
+      throw new Error(
+        `Paid ${terms.amount} in ${transactionHash} (${explorerUrl}), but the merchant returned ` +
+          "a missing, malformed, mismatched, or permanent PAYMENT-RESPONSE. Keep that hash — " +
+          "retry the URL with the PAYMENT-SIGNATURE payload rather than paying again.",
+      );
+    }
 
     if (attempt >= CONFIRM_ATTEMPTS - 1) {
       // Lead with the hash. The money is gone either way, and a caller that

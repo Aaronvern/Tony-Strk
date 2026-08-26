@@ -35,21 +35,39 @@ export interface WalletManager {
   shield(amount: string): Promise<WalletShieldResult>;
 }
 
+interface ShieldReceipt {
+  transaction_hash?: unknown;
+  execution_status?: unknown;
+  finality_status?: unknown;
+  block_number?: unknown;
+}
+
 interface WalletManagerOptions extends Omit<WalletEnv, "privateKey" | "address" | "passphrase" | "avnuApiKey"> {
   store: KeychainStore;
   paymaster: PaymasterKeyStore;
   explorerBase?: string;
   /** Test seams; production loads the wallet and waits through the manager. */
   wallet?: PayWallet | null;
-  waitForTransaction?: (transactionHash: string) => Promise<{ block_number: number }>;
+  waitForTransaction?: (transactionHash: string) => Promise<ShieldReceipt>;
 }
+
+const ACCEPTED_FINALITY = new Set(["ACCEPTED_ON_L2", "ACCEPTED_ON_L1"]);
+
+const sameFelt = (left: unknown, right: string) => {
+  if (typeof left !== "string") return false;
+  try {
+    return BigInt(left) === BigInt(right);
+  } catch {
+    return false;
+  }
+};
 
 export function createWalletManager(options: WalletManagerOptions): WalletManager {
   const node = new RpcProvider({ nodeUrl: options.rpcUrl });
   const waitForTransaction =
     options.waitForTransaction ??
     (async (transactionHash: string) =>
-      (await node.waitForTransaction(transactionHash)) as { block_number: number });
+      (await node.waitForTransaction(transactionHash)) as ShieldReceipt);
 
   async function accountState() {
     const secret = await options.store.load();
@@ -161,6 +179,33 @@ export function createWalletManager(options: WalletManagerOptions): WalletManage
         },
       ]);
       const receipt = await waitForTransaction(transaction_hash);
+      if (!receipt || typeof receipt !== "object" || Array.isArray(receipt)) {
+        throw new Error("Shield transaction returned a malformed receipt.");
+      }
+      if (
+        receipt.transaction_hash !== undefined &&
+        (typeof receipt.transaction_hash !== "string" ||
+          (receipt.transaction_hash !== transaction_hash && !sameFelt(receipt.transaction_hash, transaction_hash)))
+      ) {
+        throw new Error("Shield transaction receipt hash does not match the submitted transaction hash.");
+      }
+      if (receipt.execution_status !== "SUCCEEDED") {
+        throw new Error(
+          `Shield transaction did not succeed (${String(receipt.execution_status ?? "missing execution status")}).`,
+        );
+      }
+      if (!ACCEPTED_FINALITY.has(String(receipt.finality_status ?? ""))) {
+        throw new Error(
+          `Shield transaction is not accepted (${String(receipt.finality_status ?? "missing finality status")}).`,
+        );
+      }
+      if (
+        typeof receipt.block_number !== "number" ||
+        !Number.isSafeInteger(receipt.block_number) ||
+        receipt.block_number < 0
+      ) {
+        throw new Error("Shield transaction receipt has no valid block number.");
+      }
       const receiptBlock = receipt.block_number;
 
       return {

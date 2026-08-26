@@ -70,6 +70,9 @@ export async function browse(
   }
 
   let { url, address } = await assertPublicHttpUrl(input.url);
+  const signedRequest = Object.keys(input.headers ?? {}).some(
+    (name) => name.toLowerCase() === "payment-signature",
+  );
   let response: Response;
   for (let redirects = 0; ; redirects++) {
     response = await deps.fetchImpl(url.toString(), {
@@ -83,7 +86,11 @@ export async function browse(
     if (!location || response.status < 300 || response.status >= 400) break;
     await response.body?.cancel().catch(() => {});
     if (redirects >= MAX_REDIRECTS) throw new Error("Too many redirects.");
-    ({ url, address } = await assertPublicHttpUrl(new URL(location, url).toString()));
+    const redirect = new URL(location, url);
+    if (signedRequest && redirect.origin !== url.origin) {
+      throw new Error("Signed requests cannot follow redirects to another origin.");
+    }
+    ({ url, address } = await assertPublicHttpUrl(redirect.toString()));
   }
   const body = await readBody(response!);
 

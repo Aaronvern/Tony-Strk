@@ -20,7 +20,7 @@ export default function RoutePreview() {
   return (
     <section className="console" id="console">
       <div className="console-heading">
-        <p className="eyebrow">Route preview / local only</p>
+        <p className="eyebrow">Concept preview / local only</p>
         <h2>Ask the shell<br />to move.</h2>
       </div>
       <form onSubmit={submit} className="route-form">
@@ -32,7 +32,7 @@ export default function RoutePreview() {
         <p aria-live="polite" className="route-status">{message}</p>
       </form>
       <div className="route-steps">
-        {['Local map', 'Separate MCP', 'Isolated worker', 'Optional OHTTP'].map((label, index) => (
+        {['Current: local map', 'Current: local MCP', 'Roadmap: worker isolation', 'Roadmap: OHTTP relay'].map((label, index) => (
           <article key={label}><span>0{index + 1}</span><strong>{label}</strong><i>{index < 3 ? '→' : '✓'}</i></article>
         ))}
       </div>

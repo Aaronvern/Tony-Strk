@@ -62,6 +62,7 @@ export type Verdict =
  * wallet, or RPC produced the hex.
  */
 const sameFelt = (left: string, right: string) => {
+  if (typeof left !== "string") return false;
   try {
     return BigInt(left) === BigInt(right);
   } catch {
@@ -111,8 +112,12 @@ export function verifyReceipt(
   // Narrow by the whole key tuple at once. Matching on the selector alone and
   // then checking the merchant would accept a receipt addressed to somebody
   // else that happens to share a transaction with ours.
-  const receipts = (receipt.events ?? []).filter(
+  const receipts = (Array.isArray(receipt.events) ? receipt.events : []).filter(
     (event) =>
+      typeof event === "object" && event !== null &&
+      typeof event.from_address === "string" &&
+      Array.isArray(event.keys) && event.keys.every((key) => typeof key === "string") &&
+      Array.isArray(event.data) && event.data.every((value) => typeof value === "string") &&
       sameFelt(event.from_address, terms.anonymizer) &&
       event.keys.length >= 3 &&
       sameFelt(event.keys[0], PAYWALL_PAID) &&

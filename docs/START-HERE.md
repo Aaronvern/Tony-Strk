@@ -202,20 +202,22 @@ keys only.**
 
 ---
 
-## 7. What to pick up
+## 7. Roadmap and rehearsals
 
 Ordered by what the score rewards. See [`BUILD-STEPS.md`](BUILD-STEPS.md) for the full task list with owners.
 
 The payment layer is a **real dependency you can build against** rather than a
 stub — `wallet_shield` and `pay_paywall` use the same configured `SdkWallet`,
-and the joined MCP test exercises the HTTP exchange without spending funds.
+and the joined MCP test exercises the HTTP exchange without spending funds. The
+items below are labelled so roadmap work is not confused with active server
+capabilities.
 
-- **MCP follow-up** — add `balance` / `topup` only when their wallet behavior is specified; metering and worker isolation are not implemented.
-- **Live paywall rehearsal** — start the merchant behind a temporary public
+- **Roadmap — MCP follow-up** — add `balance` / `topup` only when their wallet behavior is specified; metering and worker isolation are not implemented.
+- **Rehearsal — live paywall** — start the merchant behind a temporary public
   HTTPS tunnel, run `verify:x402` for preflight, then use `--live` only with
   mature Sepolia notes.
-- **Browsing follow-up** — keep the current Tor HTTP fetcher hardened; add a browser worker only if JavaScript-rendered pages become a demonstrated requirement.
-- **Viewing-key `reveal`** — decrypt and display the user's own spend history. Cheap to build, big narrative payoff.
+- **Roadmap — browsing follow-up** — keep the current Tor HTTP fetcher hardened; add a browser worker only if JavaScript-rendered pages become a demonstrated requirement.
+- **Roadmap — viewing-key `reveal`** — decrypt and display the user's own spend history. Cheap to build, big narrative payoff.
 
 **Coordinate before starting** so we don't collide — the money path is currently in progress.
 

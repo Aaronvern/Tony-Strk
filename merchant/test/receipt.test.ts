@@ -146,3 +146,17 @@ test("a malformed event price is refused without crashing", () => {
   assert.doesNotThrow(() => verifyReceipt(malformed, TERMS, SETTLEMENT_HASH));
   assert.equal(verifyReceipt(malformed, TERMS, SETTLEMENT_HASH).ok, false);
 });
+
+test("malformed RPC event arrays fail closed without throwing", () => {
+  const malformedReceipts = [
+    { ...settlement, events: {} },
+    { ...settlement, events: [null] },
+    { ...settlement, events: [{ from_address: TERMS.anonymizer, keys: {}, data: [] }] },
+    { ...settlement, events: [{ from_address: TERMS.anonymizer, keys: [], data: {} }] },
+  ] as unknown as ChainReceipt[];
+
+  for (const receipt of malformedReceipts) {
+    assert.doesNotThrow(() => verifyReceipt(receipt, TERMS, SETTLEMENT_HASH));
+    assert.equal(verifyReceipt(receipt, TERMS, SETTLEMENT_HASH).ok, false);
+  }
+});

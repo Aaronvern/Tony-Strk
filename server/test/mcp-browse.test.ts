@@ -87,6 +87,63 @@ test("browse rejects redirects to private addresses", async () => {
   assert.equal(attempts, 1, "must not fetch the rejected redirect target");
 });
 
+test("browse rejects a signed redirect to another origin before forwarding it", async () => {
+  const targets: string[] = [];
+
+  await assert.rejects(
+    () =>
+      browse(
+        {
+          url: "https://8.8.8.8/article",
+          headers: { "PAYMENT-SIGNATURE": "signed" },
+        },
+        {
+          torProxy: "socks5://127.0.0.1:9050",
+          fetchImpl: (target) => {
+            targets.push(target);
+            return new Response(null, {
+              status: 302,
+              headers: { location: "https://1.1.1.1/private" },
+            });
+          },
+        },
+      ),
+    /origin/i,
+  );
+
+  assert.deepEqual(targets, ["https://8.8.8.8/article"]);
+});
+
+test("browse retains a signed header across a same-origin redirect", async () => {
+  let attempts = 0;
+  const seen: Array<Record<string, string> | undefined> = [];
+
+  const result = await browse(
+    {
+      url: "https://8.8.8.8/old",
+      headers: { "PAYMENT-SIGNATURE": "signed" },
+    },
+    {
+      torProxy: "socks5://127.0.0.1:9050",
+      fetchImpl: (target, options) => {
+        seen.push(options.headers);
+        attempts++;
+        if (attempts === 1) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: "https://8.8.8.8/new" },
+          });
+        }
+        assert.equal(target, "https://8.8.8.8/new");
+        return new Response("same-origin");
+      },
+    },
+  );
+
+  assert.equal(result.text, "same-origin");
+  assert.deepEqual(seen, [{ "PAYMENT-SIGNATURE": "signed" }, { "PAYMENT-SIGNATURE": "signed" }]);
+});
+
 test("browse rejects private addresses before fetching", async () => {
   let attempted = false;
 

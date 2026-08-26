@@ -124,7 +124,6 @@ Building in public, daily. Honest state — nothing is listed as working before 
 - [x] **A paywall that takes anonymous payment** — merchant verifies a `PaywallPaid` receipt from the chain and never learns who paid
 - [x] **The agent does it alone** — `pay_paywall` over MCP: browse → 402 → settle → read, in [`0x37e3d5ad…`](https://sepolia.voyager.online/tx/0x37e3d5ad03efa7a4ef0890d16685f8808ae3160270827506aca83eda967c5a2)
 - [x] **Wallet-driven pool operations** — shield and unshield through Ready, from [`/pool`](#pool-console)
-- [x] 178 tests — web 13, server 91, merchant 57, Cairo 17
 
 **Not done:**
 
@@ -295,8 +294,8 @@ pass the tunnel's HTTPS URL to `pay_paywall`.
 MERCHANT_TRUST_PROXY=1 npm run start:merchant
 cloudflared tunnel --url http://127.0.0.1:8788
 TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server
-npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL
-npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live
+npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy
+npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy --live
 ```
 
 The first verifier command performs a no-spend preflight. `--live` calls the
@@ -366,9 +365,9 @@ npm run verify:mcp
 # → {"IsTor":true,"IP":"<a Tor exit>"}
 
 # with the merchant exposed at a public HTTPS URL
-npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL
+npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy
 # add --live only to spend Sepolia test STRK
-npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live
+npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy --live
 ```
 
 ---

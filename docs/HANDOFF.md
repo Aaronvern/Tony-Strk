@@ -91,8 +91,8 @@ exercise the real MCP flow's public-HTTPS and Tor requirements.
 npm test
 npm run build
 npm run verify:mcp
-npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL
-npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live
+npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy
+npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy --live
 ```
 
 The first x402 command spends nothing. Append `--live` only when the mature

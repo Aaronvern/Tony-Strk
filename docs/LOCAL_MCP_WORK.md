@@ -152,8 +152,8 @@ Run the verifier first; add `--live` only when the wallet is ready and the
 shielded note is mature.
 
 ```sh
-npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL
-npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live
+npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy
+npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy --live
 ```
 
 ## Do the Checks
@@ -168,7 +168,7 @@ npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live
 4. Run `npm run verify:mcp` while the local server is active. This calls the Tor
    Project endpoint through MCP.
 
-5. Run `npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL` for a no-spend
+5. Run `npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy` for a no-spend
    preflight, or append `--live` for an opt-in Sepolia payment.
 
 ## Code References

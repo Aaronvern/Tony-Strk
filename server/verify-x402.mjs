@@ -57,7 +57,10 @@ try {
   }
   const health = await healthResponse.json();
   console.log(`health     ${jsonForLog(health)}`);
-  if (health?.torProxy !== "configured") {
+  if (health?.ok !== true) {
+    throw new Error("the MCP server health check did not report ok=true");
+  }
+  if (health.torProxy !== "configured") {
     throw new Error("the MCP server does not report a configured Tor proxy");
   }
 
