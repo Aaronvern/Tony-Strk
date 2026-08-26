@@ -3,7 +3,8 @@ import type { PayWallet } from "./pay.ts";
 import {
   balanceSurplus,
   buildPaywallActions,
-  parsePaymentRequired,
+  buildPaymentPayload,
+  parsePaymentRequiredHeader,
   type PaymentTerms,
 } from "./paywall.ts";
 
@@ -49,6 +50,7 @@ export interface SettleResult extends BrowseResult {
 /** How long to keep retrying while the merchant cannot see the payment yet. */
 const CONFIRM_ATTEMPTS = 8;
 const CONFIRM_DELAY_MS = 5_000;
+const encode = (value: unknown) => Buffer.from(JSON.stringify(value), "utf8").toString("base64");
 
 export async function settlePaywall(
   input: SettleInput,
@@ -61,13 +63,10 @@ export async function settlePaywall(
     return { ...first, paid: false };
   }
 
-  let body: unknown;
-  try {
-    body = JSON.parse(first.text);
-  } catch {
+  if (!first.paymentRequiredHeader) {
     throw new Error(
-      `${input.url} answered 402 but its body is not JSON payment terms, so there is ` +
-        "nothing to settle.",
+      `${input.url} answered 402 without a canonical PAYMENT-REQUIRED header, so there is ` +
+        "nothing safe to settle.",
     );
   }
 
@@ -80,7 +79,7 @@ export async function settlePaywall(
         ? input.maxPrice
         : deps.maxPrice;
 
-  const terms: PaymentTerms = parsePaymentRequired(body, {
+  const terms: PaymentTerms = parsePaymentRequiredHeader(first.paymentRequiredHeader, {
     trustedAnonymizers: deps.trustedAnonymizers,
     maxPrice: ceiling,
     asset: deps.asset,
@@ -122,7 +121,12 @@ export async function settlePaywall(
   // transaction is in a block. A 402 here means "not yet", not "refused".
   for (let attempt = 0; ; attempt++) {
     const paid = await browse(
-      { url: input.url, headers: { "X-Payment": transactionHash } },
+      {
+        url: input.url,
+        headers: {
+          "PAYMENT-SIGNATURE": encode(buildPaymentPayload(terms, transactionHash)),
+        },
+      },
       deps,
     );
     if (paid.status !== 402) return { ...paid, ...settled };
@@ -133,7 +137,7 @@ export async function settlePaywall(
       throw new Error(
         `Paid ${terms.amount} in ${transactionHash} (${explorerUrl}), but ${input.url} still ` +
           `answers 402 after ${CONFIRM_ATTEMPTS} attempts. Keep that hash — retry the URL ` +
-          `with the X-Payment header rather than paying again. Last response: ${paid.text.slice(0, 300)}`,
+          `with the PAYMENT-SIGNATURE payload rather than paying again. Last response: ${paid.text.slice(0, 300)}`,
       );
     }
     await sleep(CONFIRM_DELAY_MS);

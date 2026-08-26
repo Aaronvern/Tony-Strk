@@ -59,9 +59,10 @@ export function createServer(deps: ServerDeps): McpServer {
     },
     async ({ url, raw }) => {
       const result = await browse({ url, raw }, deps);
+      const { paymentRequiredHeader: _required, paymentResponseHeader: _response, ...publicResult } = result;
       return {
         content: [{ type: "text" as const, text: result.text }],
-        structuredContent: result,
+        structuredContent: publicResult,
       };
     },
   );
@@ -200,6 +201,7 @@ export function createServer(deps: ServerDeps): McpServer {
           { url, maxPrice: maxPriceWei === undefined ? undefined : BigInt(maxPriceWei) },
           { ...deps, ...deps.settle! },
         );
+        const { paymentRequiredHeader: _required, paymentResponseHeader: _response, ...publicResult } = result;
         return {
           content: [
             {
@@ -209,7 +211,7 @@ export function createServer(deps: ServerDeps): McpServer {
                 : result.text,
             },
           ],
-          structuredContent: result,
+          structuredContent: publicResult,
         };
       },
     );

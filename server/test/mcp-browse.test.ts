@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 
 import { browse } from "../src/tools/browse.ts";
+import { createServer } from "../src/mcp/server.ts";
 
 test("browse refuses to fetch when no Tor proxy is configured", async () => {
   let attempted = false;
@@ -328,4 +331,54 @@ test("browse can return the raw markup when asked", async () => {
   );
 
   assert.equal(result.text, page);
+});
+
+test("browse retains only the selected x402 response headers internally", async () => {
+  const result = await browse(
+    { url: "https://example.com/a" },
+    {
+      torProxy: "socks5://127.0.0.1:9050",
+      fetchImpl: () => new Response("paid", {
+        headers: {
+          "PAYMENT-REQUIRED": "required-header",
+          "PAYMENT-RESPONSE": "response-header",
+          authorization: "do-not-retain",
+          "X-Access-Token": "do-not-retain-either",
+        },
+      }),
+    },
+  );
+
+  assert.equal(result.paymentRequiredHeader, "required-header");
+  assert.equal(result.paymentResponseHeader, "response-header");
+  assert.equal("authorization" in result, false);
+  assert.equal("headers" in result, false);
+});
+
+test("the public MCP browse result strips internal x402 headers", async () => {
+  const server = createServer({
+    torProxy: "socks5://127.0.0.1:9050",
+    fetchImpl: () => new Response("paid", {
+      headers: {
+        "PAYMENT-REQUIRED": "required-header",
+        "PAYMENT-RESPONSE": "response-header",
+        authorization: "do-not-retain",
+      },
+    }),
+  });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "browse-boundary-test", version: "0.0.0" });
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+
+  const result = await client.callTool({
+    name: "browse",
+    arguments: { url: "https://example.com/a" },
+  });
+  const structured = result.structuredContent as Record<string, unknown>;
+  assert.equal(structured.paymentRequiredHeader, undefined);
+  assert.equal(structured.paymentResponseHeader, undefined);
+  assert.equal(structured.authorization, undefined);
+  assert.equal(structured.headers, undefined);
+  await client.close();
+  await server.close();
 });

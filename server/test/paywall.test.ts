@@ -5,7 +5,8 @@ import {
   SCHEME,
   balanceSurplus,
   buildPaywallActions,
-  parsePaymentRequired,
+  buildPaymentPayload,
+  parsePaymentRequiredHeader,
 } from "../src/pay/paywall.ts";
 
 const ANONYMIZER = "0x767a1daf3503e51882e88f6d4f1ef510517895ed0c91f8847bbf85eb9d389d";
@@ -13,6 +14,41 @@ const ASSET = "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938
 const PAY_TO = "0x4d45524348414e54";
 const RESOURCE_HASH = "0xffa430bc25381cb7e9c9cb8d01ea317794dfb78741a7748fecd59c796f3b75";
 const URL = "https://ledger.example/article/agent-privacy";
+const NETWORK = "starknet:SN_SEPOLIA";
+const PRICE = "50000000000000000";
+
+const RESOURCE = {
+  url: URL,
+  description: "Why your agent leaks more than you do",
+  mimeType: "text/html",
+  serviceName: "Ledger & Lantern",
+  tags: ["privacy", "research"],
+};
+
+const ACCEPTED = {
+  scheme: SCHEME,
+  network: NETWORK,
+  amount: PRICE,
+  asset: ASSET,
+  payTo: PAY_TO,
+  maxTimeoutSeconds: 600,
+  extra: {
+    assetTransferMethod: "strk20-privacy-invoke",
+    paymentFlow: "upfront",
+    anonymizer: ANONYMIZER,
+    resourceHash: RESOURCE_HASH,
+  },
+};
+
+const encode = (value: unknown) => Buffer.from(JSON.stringify(value), "utf8").toString("base64");
+
+const required = (overrides: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) => ({
+  x402Version: 2,
+  error: "PAYMENT-SIGNATURE header is required",
+  resource: RESOURCE,
+  accepts: [{ ...ACCEPTED, ...overrides, extra: { ...ACCEPTED.extra, ...extra } }],
+  extensions: {},
+});
 
 const OPTIONS = {
   trustedAnonymizers: [ANONYMIZER],
@@ -20,118 +56,110 @@ const OPTIONS = {
   asset: ASSET,
 };
 
-const body = (overrides: Record<string, unknown> = {}, extra: Record<string, unknown> = {}) => ({
-  x402Version: 1,
-  accepts: [
-    {
-      scheme: SCHEME,
-      network: "starknet-sepolia",
-      maxAmountRequired: "50000000000000000",
-      resource: URL,
-      description: "Why your agent leaks more than you do",
-      payTo: PAY_TO,
-      asset: ASSET,
-      extra: { anonymizer: ANONYMIZER, resourceHash: RESOURCE_HASH, ...extra },
-      ...overrides,
-    },
-  ],
-});
+const parse = (value = required(), options = OPTIONS) =>
+  parsePaymentRequiredHeader(encode(value), options);
 
-test("a well-formed 402 parses into terms", () => {
-  const terms = parsePaymentRequired(body(), { ...OPTIONS, requestedUrl: URL });
+test("a well-formed v2 PAYMENT-REQUIRED header parses into terms", () => {
+  const terms = parse(required(), { ...OPTIONS, requestedUrl: URL });
   assert.equal(terms.amount, 50_000_000_000_000_000n);
   assert.equal(terms.payTo, PAY_TO);
   assert.equal(terms.anonymizer, ANONYMIZER);
   assert.equal(terms.resourceHash, RESOURCE_HASH);
+  assert.deepEqual(terms.resource, RESOURCE);
+  assert.deepEqual(terms.accepted, ACCEPTED);
+});
+
+test("a body-only v1 payment object is rejected", () => {
+  const v1 = {
+    x402Version: 1,
+    accepts: [{ scheme: SCHEME, network: "starknet-sepolia", maxAmountRequired: PRICE }],
+  };
+  assert.throws(() => parsePaymentRequiredHeader(encode(v1), OPTIONS), /x402Version.*2/);
+});
+
+test("PAYMENT-REQUIRED must be canonical standard Base64 JSON", () => {
+  assert.throws(() => parsePaymentRequiredHeader("not-base64", OPTIONS), /Base64/i);
+  assert.throws(() => parsePaymentRequiredHeader(`${encode(required())}=`, OPTIONS), /Base64/i);
+  assert.throws(() => parsePaymentRequiredHeader(encode({}), OPTIONS), /payment requirements|x402Version/i);
+});
+
+test("only the Sepolia network and upfront flow are accepted", () => {
+  assert.throws(() => parse(required({ network: "starknet:SN_MAIN" })), /network/i);
+  assert.throws(() => parse(required({}, { paymentFlow: "authorization" })), /upfront/i);
+});
+
+test("the top-level resource URL is required and query/fragment-insensitive", () => {
+  const missing = { ...required(), resource: { ...RESOURCE, url: undefined } };
+  assert.throws(() => parse(missing), /resource.*url/i);
+
+  const terms = parse(required(), {
+    ...OPTIONS,
+    requestedUrl: `${URL}?utm_source=agent#read`,
+  });
+  assert.equal(terms.resource.url, URL);
 });
 
 test("an untrusted anonymizer is refused", () => {
-  // The whole point: `invoke` calls this contract while holding the money, so
-  // a merchant that could name any contract could name one that keeps it.
-  assert.throws(
-    () => parsePaymentRequired(body({}, { anonymizer: "0xbadc0de" }), OPTIONS),
-    /does not trust/,
-  );
+  assert.throws(() => parse(required({}, { anonymizer: "0xbadc0de" })), /does not trust/);
 });
 
-test("trust compares addresses as field elements", () => {
-  const padded = "0x00767a1daf3503e51882e88f6d4f1ef510517895ed0c91f8847bbf85eb9d389d";
-  const terms = parsePaymentRequired(body(), { ...OPTIONS, trustedAnonymizers: [padded] });
+test("trust compares helper addresses as field elements", () => {
+  const padded = `0x00${ANONYMIZER.slice(2)}`;
+  const terms = parse(required(), { ...OPTIONS, trustedAnonymizers: [padded] });
   assert.equal(terms.anonymizer, ANONYMIZER);
 });
 
 test("an empty trust list refuses everything", () => {
   assert.throws(
-    () => parsePaymentRequired(body(), { ...OPTIONS, trustedAnonymizers: [] }),
+    () => parse(required(), { ...OPTIONS, trustedAnonymizers: [] }),
     /no anonymizer contract is trusted/,
   );
 });
 
-test("a price above the ceiling is refused", () => {
+test("a price above the ceiling is refused and a price at it is allowed", () => {
   assert.throws(
-    () => parsePaymentRequired(body(), { ...OPTIONS, maxPrice: 49_999_999_999_999_999n }),
+    () => parse(required({ amount: "49999999999999999" }), { ...OPTIONS, maxPrice: 49_999_999_999_999_998n }),
     /above the .* ceiling/,
   );
-});
-
-test("a price at the ceiling is allowed", () => {
-  const terms = parsePaymentRequired(body(), { ...OPTIONS, maxPrice: 50_000_000_000_000_000n });
+  const terms = parse(required({ amount: PRICE }), { ...OPTIONS, maxPrice: 50_000_000_000_000_000n });
   assert.equal(terms.amount, 50_000_000_000_000_000n);
 });
 
 test("a zero or negative price is refused", () => {
-  for (const price of ["0", "-1"]) {
-    assert.throws(
-      () => parsePaymentRequired(body({ maxAmountRequired: price }), OPTIONS),
-      /price of zero or less/,
-    );
+  for (const amount of ["0", "-1"]) {
+    assert.throws(() => parse(required({ amount })), /price of zero or less|unreadable price/);
   }
 });
 
-test("terms for a different resource than the one requested are refused", () => {
+test("terms for a different resource are refused", () => {
   assert.throws(
-    () =>
-      parsePaymentRequired(body(), {
-        ...OPTIONS,
-        requestedUrl: "https://ledger.example/article/something-else",
-      }),
+    () => parse(required(), { ...OPTIONS, requestedUrl: "https://ledger.example/article/other" }),
     /not the .* that was requested/,
   );
 });
 
-test("a query string does not make the resource a different one", () => {
-  const terms = parsePaymentRequired(body(), {
-    ...OPTIONS,
-    requestedUrl: `${URL}?utm_source=agent`,
-  });
-  assert.equal(terms.resource, URL);
+test("an identified-payer scheme and wrong token are refused", () => {
+  assert.throws(
+    () => parse({ ...required(), accepts: [{ ...ACCEPTED, scheme: "exact" }] }),
+    /No strk20-anonymizer terms/,
+  );
+  assert.throws(() => parse(required({ asset: "0xdead" })), /pays in/);
 });
 
-test("an x402 scheme that identifies the payer is refused by name", () => {
-  const exact = { ...body(), accepts: [{ ...body().accepts[0], scheme: "exact" }] };
-  assert.throws(() => parsePaymentRequired(exact, OPTIONS), /No strk20-anonymizer terms/);
-});
-
-test("the wrong token is refused", () => {
-  assert.throws(() => parsePaymentRequired(body({ asset: "0xdead" }), OPTIONS), /pays in/);
-});
-
-test("a malformed 402 is refused rather than half-read", () => {
+test("malformed v2 requirements are refused rather than half-read", () => {
   for (const bad of [null, {}, { accepts: [] }, { accepts: "nope" }, { accepts: [{}] }]) {
-    assert.throws(() => parsePaymentRequired(bad, OPTIONS));
+    assert.throws(() => parsePaymentRequiredHeader(encode(bad), OPTIONS));
   }
   assert.throws(
-    () => parsePaymentRequired(body({}, { resourceHash: "not-a-felt" }), OPTIONS),
+    () => parse(required({}, { resourceHash: "not-a-felt" })),
     /no usable `extra.resourceHash`/,
   );
 });
 
 test("the action list matches privacy_invoke's signature", () => {
-  const terms = parsePaymentRequired(body(), OPTIONS);
+  const terms = parse();
   const [withdraw, invoke] = buildPaywallActions(terms) as any[];
 
-  // Fund the helper with exactly the price, so there is no change and the
-  // Option is None.
   assert.deepEqual(withdraw, {
     type: "withdraw",
     token: ASSET,
@@ -139,15 +167,24 @@ test("the action list matches privacy_invoke's signature", () => {
     recipient: ANONYMIZER,
   });
   assert.equal(BigInt(withdraw.amount), terms.amount);
-
   assert.equal(invoke.type, "invoke");
   assert.equal(invoke.contract, ANONYMIZER);
-  // merchant, token, price, resource_hash, Option::None (variant index 1)
   assert.deepEqual(invoke.calldata, [PAY_TO, ASSET, "0xb1a2bc2ec50000", RESOURCE_HASH, "0x1"]);
 });
 
+test("the payment payload binds the exact v2 resource and accepted terms", () => {
+  const terms = parse();
+  assert.deepEqual(buildPaymentPayload(terms, "0xabc123"), {
+    x402Version: 2,
+    resource: RESOURCE,
+    accepted: ACCEPTED,
+    payload: { transactionHash: "0xabc123" },
+    extensions: {},
+  });
+});
+
 test("a surplus rejection is answered with a transfer back to the payer", async () => {
-  const terms = parsePaymentRequired(body(), OPTIONS);
+  const terms = parse();
   let call = 0;
 
   const { actions, result } = await balanceSurplus(
@@ -168,19 +205,14 @@ test("a surplus rejection is answered with a transfer back to the payer", async 
     amount: "0xd2f13f7789f0000",
     recipient: "0x077f1679",
   });
-  // The invoke stays last: the pool reads the sink as a plain balancing leg.
   assert.equal((actions[2] as any).type, "invoke");
 });
 
 test("the balanced list is the one the operation actually ran with", async () => {
-  // The caller must never have to guess which variant succeeded: a sink
-  // measured against a stale note set is exactly the bug this returns to fix.
-  const terms = parsePaymentRequired(body(), OPTIONS);
   let seen: unknown[] = [];
   let call = 0;
-
   const { actions } = await balanceSurplus(
-    buildPaywallActions(terms),
+    buildPaywallActions(parse()),
     async (candidate) => {
       seen = candidate;
       if (call++ === 0) throw new Error("Surplus of 5 found in the transaction");
@@ -191,35 +223,28 @@ test("the balanced list is the one the operation actually ran with", async () =>
   assert.deepEqual(actions, seen);
 });
 
-test("successive rejections accumulate sinks rather than replacing them", async () => {
-  // Each rejection reports what is still unaccounted for given the sinks
-  // already present, so the amounts add up rather than supersede each other.
-  const terms = parsePaymentRequired(body(), OPTIONS);
+test("successive surplus rejections accumulate sinks", async () => {
   const surpluses = ["Surplus of 100 found", "Surplus of 25 found"];
   let call = 0;
-
   const { actions } = await balanceSurplus(
-    buildPaywallActions(terms),
+    buildPaywallActions(parse()),
     async () => {
       if (call < surpluses.length) throw new Error(surpluses[call++]);
     },
     "0x1",
     ASSET,
   );
-
   assert.equal(actions.length, 4);
   assert.equal((actions[1] as any).amount, "0x64");
   assert.equal((actions[2] as any).amount, "0x19");
   assert.equal((actions[3] as any).type, "invoke");
 });
 
-test("a rejection that is not about surplus is not retried", async () => {
-  const terms = parsePaymentRequired(body(), OPTIONS);
+test("non-surplus errors are not retried", async () => {
   let calls = 0;
-
   await assert.rejects(
     balanceSurplus(
-      buildPaywallActions(terms),
+      buildPaywallActions(parse()),
       async () => {
         calls++;
         throw new Error("NOTE_NOT_FOUND");
@@ -232,13 +257,11 @@ test("a rejection that is not about surplus is not retried", async () => {
   assert.equal(calls, 1);
 });
 
-test("an unbalanceable surplus gives up rather than looping", async () => {
-  const terms = parsePaymentRequired(body(), OPTIONS);
+test("an unbalanceable surplus gives up after four attempts", async () => {
   let calls = 0;
-
   await assert.rejects(
     balanceSurplus(
-      buildPaywallActions(terms),
+      buildPaywallActions(parse()),
       async () => {
         calls++;
         throw new Error("Surplus of 1 found in the transaction");
@@ -251,9 +274,8 @@ test("an unbalanceable surplus gives up rather than looping", async () => {
   assert.equal(calls, 4);
 });
 
-test("no surplus means the action list is left alone", async () => {
-  const terms = parsePaymentRequired(body(), OPTIONS);
-  const base = buildPaywallActions(terms);
+test("no surplus leaves the action list alone", async () => {
+  const base = buildPaywallActions(parse());
   const { actions } = await balanceSurplus(base, async () => {}, "0x1", ASSET);
   assert.deepEqual(actions, base);
 });

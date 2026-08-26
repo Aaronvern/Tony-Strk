@@ -3,10 +3,10 @@
  *
  * A merchant answers 402 with terms; this turns those terms into a STRK20
  * action list that settles them through the anonymizer, so the merchant is
- * paid and never learns who paid. The envelope is x402's `PaymentRequirements`
- * because it is a good shape and agents already understand it. The scheme name
- * is not: x402's Starknet `exact` scheme needs a signed OutsideExecution from
- * an identified payer, which is exactly the thing this exists to avoid.
+ * paid and never learns who paid. The wire envelope is x402 v2. The scheme
+ * name is custom: x402's Starknet `exact` scheme needs a signed
+ * OutsideExecution from an identified payer, which is exactly the thing this
+ * exists to avoid.
  *
  * Two guards live here rather than in the caller, because an agent paying
  * automatically cannot be asked to remember them.
@@ -20,14 +20,44 @@
  *      0.05, and the agent would pay it.
  */
 
-/** The subset of x402's PaymentRequirements this scheme uses. */
+export const NETWORK = "starknet:SN_SEPOLIA";
+
+const PAYMENT_FLOW = "upfront";
+const ASSET_TRANSFER_METHOD = "strk20-privacy-invoke";
+
+export interface PaymentResource {
+  url: string;
+  description?: string;
+  mimeType?: string;
+  serviceName?: string;
+  tags?: string[];
+}
+
+export interface AcceptedPaymentRequirement {
+  scheme: string;
+  network: string;
+  amount: string;
+  asset: string;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  extra: {
+    assetTransferMethod: string;
+    paymentFlow: string;
+    anonymizer: string;
+    resourceHash: string;
+  };
+}
+
+/** The checked x402 v2 terms used to build both legs of a payment. */
 export interface PaymentTerms {
   scheme: string;
   network: string;
   /** Price in the asset's smallest unit. */
   amount: bigint;
-  /** The URL these terms are for. */
-  resource: string;
+  /** The exact top-level x402 v2 resource object. */
+  resource: PaymentResource;
+  /** The exact accepted x402 v2 requirement object. */
+  accepted: AcceptedPaymentRequirement;
   description: string;
   /** Where the money goes. */
   payTo: string;
@@ -63,6 +93,32 @@ const sameFelt = (left: string, right: string) => {
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, any> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const sameKeys = (value: Record<string, unknown>, keys: string[]) => {
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
+};
+
+const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+
+function decodePaymentRequiredHeader(value: unknown): unknown {
+  if (typeof value !== "string" || value.length === 0 || !BASE64.test(value)) {
+    throw new Error("PAYMENT-REQUIRED must be canonical standard Base64-encoded JSON.");
+  }
+  const decoded = Buffer.from(value, "base64");
+  if (decoded.toString("base64") !== value) {
+    throw new Error("PAYMENT-REQUIRED must be canonical standard Base64-encoded JSON.");
+  }
+  try {
+    return JSON.parse(decoded.toString("utf8"));
+  } catch {
+    throw new Error("PAYMENT-REQUIRED must contain JSON payment requirements.");
+  }
+}
+
 /** Compare URLs by origin and path, ignoring the query and fragment. */
 function sameResource(left: string, right: string): boolean {
   try {
@@ -75,15 +131,34 @@ function sameResource(left: string, right: string): boolean {
 }
 
 /**
- * Read a 402 body and return terms that are safe to act on, or throw with a
- * reason a human can act on. Pure: no network, no wallet.
+ * Decode a canonical x402 v2 PAYMENT-REQUIRED header and return terms that are
+ * safe to act on, or throw with a reason a human can act on. Pure: no network,
+ * no wallet.
  */
-export function parsePaymentRequired(body: unknown, options: ParseOptions): PaymentTerms {
+export function parsePaymentRequiredHeader(value: string, options: ParseOptions): PaymentTerms {
+  const body = decodePaymentRequiredHeader(value);
+  if (!isRecord(body)) {
+    throw new Error("PAYMENT-REQUIRED must contain JSON payment requirements.");
+  }
+  if (body.x402Version !== 2) {
+    throw new Error("PAYMENT-REQUIRED x402Version must be 2.");
+  }
+
+  const resource = body.resource;
+  if (!isRecord(resource) || typeof resource.url !== "string" || !resource.url.trim()) {
+    throw new Error("PAYMENT-REQUIRED must include a top-level resource.url.");
+  }
+  try {
+    new URL(resource.url);
+  } catch {
+    throw new Error("PAYMENT-REQUIRED resource.url must be an absolute URL.");
+  }
+
   if (options.trustedAnonymizers.length === 0) {
     throw new Error("Refusing to pay: no anonymizer contract is trusted, so no 402 can be settled.");
   }
 
-  const accepts = (body as { accepts?: unknown })?.accepts;
+  const accepts = body.accepts;
   if (!Array.isArray(accepts) || accepts.length === 0) {
     throw new Error("That 402 carries no payment terms (`accepts` is missing or empty).");
   }
@@ -102,7 +177,42 @@ export function parsePaymentRequired(body: unknown, options: ParseOptions): Paym
     );
   }
 
-  const extra = (offer.extra ?? {}) as Record<string, unknown>;
+  if (!offer || !sameKeys(offer, [
+    "scheme",
+    "network",
+    "amount",
+    "asset",
+    "payTo",
+    "maxTimeoutSeconds",
+    "extra",
+  ])) {
+    throw new Error("That 402 has an invalid accepted payment requirement shape.");
+  }
+
+  const extra = offer.extra;
+  if (!isRecord(extra) || !sameKeys(extra, [
+    "assetTransferMethod",
+    "paymentFlow",
+    "anonymizer",
+    "resourceHash",
+  ])) {
+    throw new Error("That 402 has an invalid payment helper configuration.");
+  }
+  if (offer.network !== NETWORK) {
+    throw new Error(`That 402 uses network ${JSON.stringify(offer.network)}, not ${NETWORK}.`);
+  }
+  if (extra.paymentFlow !== PAYMENT_FLOW) {
+    throw new Error(`That 402 uses payment flow ${JSON.stringify(extra.paymentFlow)}, not ${PAYMENT_FLOW}.`);
+  }
+  if (extra.assetTransferMethod !== ASSET_TRANSFER_METHOD) {
+    throw new Error(
+      `That 402 uses asset transfer method ${JSON.stringify(extra.assetTransferMethod)}, not ${ASSET_TRANSFER_METHOD}.`,
+    );
+  }
+  if (!Number.isSafeInteger(offer.maxTimeoutSeconds) || offer.maxTimeoutSeconds <= 0) {
+    throw new Error("That 402 has an invalid maxTimeoutSeconds value.");
+  }
+
   const anonymizer = extra.anonymizer;
   const resourceHash = extra.resourceHash;
 
@@ -133,9 +243,10 @@ export function parsePaymentRequired(body: unknown, options: ParseOptions): Paym
 
   let amount: bigint;
   try {
-    amount = BigInt(offer.maxAmountRequired);
+    if (typeof offer.amount !== "string" || !/^\d+$/.test(offer.amount)) throw new Error();
+    amount = BigInt(offer.amount);
   } catch {
-    throw new Error(`That 402 has an unreadable price: ${JSON.stringify(offer.maxAmountRequired)}`);
+    throw new Error(`That 402 has an unreadable price: ${JSON.stringify(offer.amount)}`);
   }
   if (amount <= 0n) throw new Error("That 402 asks for a price of zero or less.");
   if (amount > options.maxPrice) {
@@ -145,10 +256,10 @@ export function parsePaymentRequired(body: unknown, options: ParseOptions): Paym
     );
   }
 
-  if (options.requestedUrl && typeof offer.resource === "string") {
-    if (!sameResource(offer.resource, options.requestedUrl)) {
+  if (options.requestedUrl) {
+    if (!sameResource(resource.url, options.requestedUrl)) {
       throw new Error(
-        `Refusing to pay: those terms are for ${offer.resource}, not the ` +
+        `Refusing to pay: those terms are for ${resource.url}, not the ` +
           `${options.requestedUrl} that was requested.`,
       );
     }
@@ -156,14 +267,26 @@ export function parsePaymentRequired(body: unknown, options: ParseOptions): Paym
 
   return {
     scheme: SCHEME,
-    network: typeof offer.network === "string" ? offer.network : "",
+    network: offer.network,
     amount,
-    resource: typeof offer.resource === "string" ? offer.resource : options.requestedUrl ?? "",
-    description: typeof offer.description === "string" ? offer.description : "",
+    resource: resource as PaymentResource,
+    accepted: offer as AcceptedPaymentRequirement,
+    description: typeof resource.description === "string" ? resource.description : "",
     payTo: (offer.payTo as string).trim(),
     asset: (offer.asset as string).trim(),
     anonymizer: (anonymizer as string).trim(),
     resourceHash: (resourceHash as string).trim(),
+  };
+}
+
+/** Build the canonical x402 v2 PaymentPayload for a broadcast transaction. */
+export function buildPaymentPayload(terms: PaymentTerms, transactionHash: string) {
+  return {
+    x402Version: 2,
+    resource: terms.resource,
+    accepted: terms.accepted,
+    payload: { transactionHash },
+    extensions: {},
   };
 }
 

@@ -27,7 +27,8 @@ import {
 import {
   balanceSurplus,
   buildPaywallActions,
-  parsePaymentRequired,
+  buildPaymentPayload,
+  parsePaymentRequiredHeader,
 } from "../server/src/pay/paywall.ts";
 
 const arg = (name, fallback) => {
@@ -51,6 +52,7 @@ const fmt = (wei) => {
   const frac = digits.slice(-18).replace(/0+$/, "");
   return `${digits.slice(0, -18)}${frac ? `.${frac}` : ""}`;
 };
+const encode = (value) => Buffer.from(JSON.stringify(value), "utf8").toString("base64");
 
 const RPC = process.env.STARKNET_RPC_URL ?? "https://starknet-sepolia-rpc.publicnode.com";
 const POOL = process.env.POOL_ADDRESS;
@@ -89,7 +91,13 @@ if (first.status !== 402) {
   process.exit(0);
 }
 
-const terms = parsePaymentRequired(await first.json(), {
+const required = first.headers.get("PAYMENT-REQUIRED");
+if (!required) {
+  console.error("402 response has no PAYMENT-REQUIRED header");
+  process.exit(1);
+}
+
+const terms = parsePaymentRequiredHeader(required, {
   trustedAnonymizers: TRUSTED,
   maxPrice: toWei(arg("max", "0.2")),
   asset: STRK,
@@ -195,7 +203,9 @@ const receipt = await node.waitForTransaction(transaction_hash);
 console.log(`  ${receipt.execution_status} in block ${receipt.block_number}`);
 
 console.log(`\nGET ${target} with the receipt`);
-const paid = await fetch(target, { headers: { "X-Payment": transaction_hash } });
+const paid = await fetch(target, {
+  headers: { "PAYMENT-SIGNATURE": encode(buildPaymentPayload(terms, transaction_hash)) },
+});
 console.log(`  ${paid.status} ${paid.statusText}`);
 const token = paid.headers.get("x-access-token");
 if (token) console.log(`  access token ${token}`);

@@ -15,8 +15,8 @@ export interface BrowseInput {
    * arbitrary headers on an arbitrary host is a capability of its own — it
    * could forge a Host, replay a bearer token, or smuggle credentials to a
    * destination the user never authorised. The only caller that sets this is
-   * the paywall settlement, which sends one receipt header to the one URL that
-   * just asked for payment.
+   * the paywall settlement, which sends one PAYMENT-SIGNATURE header to the
+   * one URL that just asked for payment.
    */
   headers?: Record<string, string>;
 }
@@ -43,6 +43,10 @@ export interface BrowseResult {
   paymentRequired: boolean;
   title: string;
   text: string;
+  /** Internal x402 challenge; removed before any MCP result is returned. */
+  paymentRequiredHeader?: string;
+  /** Internal x402 settlement response; removed before any MCP result is returned. */
+  paymentResponseHeader?: string;
 }
 
 /**
@@ -88,13 +92,18 @@ export async function browse(
   const isHtml = (response.headers?.get("content-type") ?? "").includes("html");
   const extracted = !input.raw && isHtml ? extractText(body) : null;
 
-  return {
+  const result: BrowseResult = {
     url: url.toString(),
     status: response.status,
     paymentRequired: response.status === 402,
     title: extracted?.title ?? "",
     text: extracted?.text ?? body,
   };
+  const paymentRequiredHeader = response.headers.get("payment-required");
+  const paymentResponseHeader = response.headers.get("payment-response");
+  if (paymentRequiredHeader !== null) result.paymentRequiredHeader = paymentRequiredHeader;
+  if (paymentResponseHeader !== null) result.paymentResponseHeader = paymentResponseHeader;
+  return result;
 }
 
 async function readBody(response: Response): Promise<string> {
