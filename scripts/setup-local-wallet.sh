@@ -36,4 +36,7 @@ address="$(node --input-type=module -e '
 echo ""
 echo "Wallet setup is complete."
 echo "Fund this Sepolia address: $address"
-echo "Then ask your MCP client to call wallet_status and wallet_deploy."
+echo "Then ask your MCP client to call wallet_status."
+echo "When it reports needs_deployment, call wallet_deploy."
+echo "When it reports ready, call wallet_shield with enough public STRK for the private balance and pool fee."
+echo "Wait 12 blocks after the shield receipt before calling pay_paywall."

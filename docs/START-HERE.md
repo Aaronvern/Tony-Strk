@@ -6,11 +6,21 @@ Everything you need to understand Tony Stark and start contributing. ~10 minutes
 
 ## 1. What we're building
 
-**A local-only MCP server that lets an AI agent fetch public URLs through Tor, with an experimental private-payment path that is disabled by default.**
+**A local-only MCP server that lets an AI agent fetch public URLs through Tor and
+settle a compatible x402 paywall with shielded STRK20 test funds.**
 
-An agent (Claude, Cursor, whatever) connects to the loopback HTTP endpoint. The active `browse` tool is a stateless HTTP fetcher, not a disposable browser: it does not execute JavaScript, accept logins, or preserve cookies. `pay` appears only when the operator explicitly enables it and supplies wallet configuration.
+An agent (Claude, Cursor, whatever) connects to the loopback HTTP endpoint. The
+active `browse` tool is a stateless HTTP fetcher, not a disposable browser: it
+does not execute JavaScript, accept logins, or preserve cookies. `pay` becomes
+usable after the local wallet is ready, and `pay_paywall` also requires a
+trusted helper configuration.
 
-The problem: AI agents are starting to spend money for people, and that leaves a trail two ways — the payment (a card the issuer watches, or a transparent wallet whose balance and full history are public forever) and the browsing (an IP that identifies the person). The more autonomous the agent, the more of your life becomes a public log.
+The payment tool is available after a local wallet and trusted anonymizer are
+configured. The problem: AI agents are starting to spend money for people, and
+that leaves a trail two ways — the payment (a card the issuer watches, or a
+transparent wallet whose balance and full history are public forever) and the
+browsing (an IP that identifies the person). The more autonomous the agent, the
+more of your life becomes a public log.
 
 We're building it for StarkWare's **STRK20 Private Sprint** (deadline **Aug 31**). It's their own suggested build #11, *Private AI Agent Payments*.
 
@@ -22,7 +32,7 @@ We're building it for StarkWare's **STRK20 Private Sprint** (deadline **Aug 31**
 
 ```
    AI agent (MCP client on this machine)
-            │  browse · optional pay
+            │  browse · pay_paywall
             ▼
    ┌──────────────────────┐
    │  Tony Stark server   │  127.0.0.1:8787
@@ -34,7 +44,9 @@ We're building it for StarkWare's **STRK20 Private Sprint** (deadline **Aug 31**
              └── optional wallet path ──► Starknet
 ```
 
-The current server is one local process. It keeps no browser session or request log, but it does not claim separate browsing/payment worker isolation.
+The current server is one local process. It keeps no browser session or request
+log, but it does not claim separate browsing/payment worker isolation. The MCP
+transport is Streamable HTTP on loopback.
 
 ### The payment, technically
 
@@ -53,7 +65,11 @@ Four actions we compose:
 
 ### Who proves, and who submits — these are different
 
-Generating the ZK proof is expensive. The experimental local path asks StarkWare's hosted prover and signs with the key supplied to the local process. A future non-custodial path would instead ask the user's wallet to prove and sign (`wallet_strk20PrepareInvoke` → a SNIP-36 proof). Do not describe the current opt-in server path as keyless or non-custodial.
+Generating the ZK proof is expensive. The local path asks StarkWare's hosted
+prover and signs with the key held by the local wallet store. A future
+non-custodial path could instead ask the user's wallet to prove and sign
+(`wallet_strk20PrepareInvoke` → a SNIP-36 proof). Do not describe the current
+local path as keyless or non-custodial.
 
 **Then it has to be submitted, and that's a separate problem.** The SDK's `execute()` returns `{callAndProof, registry}` — proved, not submitted. Getting it on-chain means calling `apply_actions` **with the proof attached to the transaction**, and a plain starknet.js `Account` has no way to attach it. Only two things can:
 
@@ -66,7 +82,10 @@ Generating the ZK proof is expensive. The experimental local path asks StarkWare
 
 ### Two constraints that shape everything
 
-The prover reads **finalized** state, and the sequencer only accepts proofs whose base block is **≥10 blocks old**. So a shielded transfer per page-view is physically impossible.
+The prover reads **finalized** state, and the sequencer only accepts proofs
+whose base block is **12 blocks old**. A new deployment, top-up, or shielded
+note must mature before the next proof, so a shielded transfer per page-view is
+not an immediate operation.
 
 The planned product shape is therefore: prepaid shielded balance → usage metered **off-chain** → settlement in **batches**. That metering and batching layer is not implemented in the active server.
 
@@ -112,11 +131,13 @@ Every deposit is screened against sanctions lists before a proof is issued — m
 | Submission via AVNU paymaster | ✅ works |
 | **Shielded deposit on-chain** | ✅ **3 STRK shielded** |
 | **Sanctions screening** | ✅ **passed** |
-| Private transfer | ⬜ next (pool is funded) |
-| Local MCP server | ✅ loopback-only `browse`; optional `pay` |
-| Hero loop, mainnet | ⬜ to build |
+| Local wallet lifecycle | ✅ create → fund → deploy → paymaster → shield → mature |
+| x402 v2 merchant + payer | ✅ deterministic flow through `pay_paywall` |
+| Joined MCP-to-merchant test | ✅ HTTP 402 → settlement → protected content |
+| Live x402 verifier | ✅ preflight; `--live` is opt-in and spends test STRK |
+| Mainnet paywall settlement | ⬜ Sepolia-only while mainnet prover/wallet support is unavailable |
 
-**The money path works end to end** — SDK → hosted prover → ZK proof → paymaster → pool → Starknet:
+**The shield path works end to end** — SDK → hosted prover → ZK proof → paymaster → pool → Starknet:
 
 ```
 tx 0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349
@@ -134,7 +155,7 @@ Reassuring side note: the pool holds **~212,000 STRK** across its users. That's 
 
 ```bash
 git clone git@github.com:Aaronvern/Tony-Strk.git && cd Tony-Strk
-nvm use          # Node 24 — required by ohttp-ts
+nvm use          # Node 24 — required by the privacy SDK
 npm install
 npm run setup    # clones + builds the privacy SDK (it isn't published to npm)
 
@@ -154,7 +175,11 @@ npm run verify:mcp
 # → {"IsTor":true,"IP":"<a Tor exit>"}
 ```
 
-No `.env` is needed for browsing. If a gitignored root `.env` exists, Node loads it; otherwise safe defaults apply. Payment secrets can come from the environment, and `pay` remains absent unless `PAY_ENABLED=true`. **Testnet keys only.**
+No `.env` is needed for browsing. If a gitignored root `.env` exists, Node
+loads it; otherwise safe defaults apply. On macOS, keep wallet and AVNU
+credentials in Keychain. Configure a trusted
+`PAYWALL_ANONYMIZER_ADDRESS` before starting the MCP payment path. **Testnet
+keys only.**
 
 ---
 
@@ -162,12 +187,15 @@ No `.env` is needed for browsing. If a gitignored root `.env` exists, Node loads
 
 1. **`starknet@10.7.0` exactly.** npm's `latest` resolves to 10.0.2, which predates the STRK20 API entirely.
 2. **The deployed pool class hashes differ from the SDK README.** The live pools run a newer revision than the docs claim — pin to the deployment, not the table.
-3. **Node 24 or nothing** — `ohttp-ts` needs its WebCrypto.
+3. **Node 24 or nothing** — the privacy SDK requires Node 24.
 4. **Starknet accounts must be deployed** before they can sign; an address exists counterfactually and fails confusingly until then.
 5. **The privacy SDK isn't on npm** — install from GitHub Packages or a git SHA.
-6. **A first deposit must be larger than the fee.** The paymaster settles its fee by *withdrawing from the pool*, and Sepolia quotes a flat **2 STRK**. The deposit and the fee-withdraw are proven together, so the deposit funds the fee — but only if it's bigger. Deposit 1 against a 2 STRK fee and you get `Insufficient balance … total available: 0`, which reads like an empty wallet and is really a bootstrapping problem.
-7. **Prove against `latest - 12`, never `latest`.** The sequencer rejects a proof whose base block is too recent (`The proof block number … is too recent`). This is the 10-block rule as a hard failure, not a warning.
-8. **The 2 STRK fee is a testnet quote**, not a real cost. Don't model per-payment economics on it — mainnet needs re-measuring.
+6. **A first shield must cover the fee.** The paymaster settles its fee from
+   the pool. Shield enough public Sepolia STRK for both the desired private
+   balance and the current pool fee; read the fee from the external stack.
+7. **Prove against `latest - 12`, never `latest`.** The sequencer rejects a proof whose base block is too recent (`The proof block number … is too recent`). This 12-block maturity rule is a hard failure, not a warning.
+8. **Pool fees are network and service values**, not UI constants. Do not model
+   per-payment economics on a Sepolia quote.
 9. **The viewing key must be ≤ `CURVE.n / 2`** — half the curve order. A raw Poseidon digest overflows it about half the time → `PRIVATE_KEY_NOT_CANONICAL`. (The client package derives it from a passphrase, so this only bites on the raw-SDK path.)
 10. **Errors surface from the prover, not the chain.** A failed action reverts inside the prover's *virtual* block, so the tx hash in the error doesn't exist on Starknet — don't look it up on an explorer. Decode the felt in the revert reason instead.
 11. **Never claim more privacy than we've verified.** If it's not in the "verified" table above, it's not a claim.
@@ -178,10 +206,14 @@ No `.env` is needed for browsing. If a gitignored root `.env` exists, Node loads
 
 Ordered by what the score rewards. See [`BUILD-STEPS.md`](BUILD-STEPS.md) for the full task list with owners.
 
-Now that the money path works, the payment layer is a **real dependency you can build against** rather than a stub — `scripts/submit-via-paymaster.mjs` is a working reference for shielding, and the same `SdkWallet` handles transfers.
+The payment layer is a **real dependency you can build against** rather than a
+stub — `wallet_shield` and `pay_paywall` use the same configured `SdkWallet`,
+and the joined MCP test exercises the HTTP exchange without spending funds.
 
-- **MCP follow-up** — add `balance` / `topup` only when their wallet behavior is specified; metering and worker isolation remain future work.
-- **The STRK20 paywall endpoint** — a small service that returns 402 with a price and unlocks on payment. This is the hero demo's other half.
+- **MCP follow-up** — add `balance` / `topup` only when their wallet behavior is specified; metering and worker isolation are not implemented.
+- **Live paywall rehearsal** — start the merchant behind a temporary public
+  HTTPS tunnel, run `verify:x402` for preflight, then use `--live` only with
+  mature Sepolia notes.
 - **Browsing follow-up** — keep the current Tor HTTP fetcher hardened; add a browser worker only if JavaScript-rendered pages become a demonstrated requirement.
 - **Viewing-key `reveal`** — decrypt and display the user's own spend history. Cheap to build, big narrative payoff.
 
@@ -195,7 +227,7 @@ Now that the money path works, the payment layer is a **real dependency you can 
 |---|---|
 | [`local-mcp-hardening-design.md`](superpowers/specs/2026-08-21-local-mcp-hardening-design.md) | current local architecture and security boundaries |
 | [`PRIVACY-STACK.md`](PRIVACY-STACK.md) | current guarantees, planned layers, and residual leaks |
-| [`PLAN.md`](PLAN.md) | archived remote MCP + Obscura proposal — superseded |
+| [`PLAN.md`](PLAN.md) | archived remote MCP architecture proposal — superseded |
 | [`THREAT-MODEL.md`](THREAT-MODEL.md) | archived threat model for the superseded proposal |
 | [`SPIKE-RESULTS.md`](SPIKE-RESULTS.md) | what we verified first-hand, with evidence |
 | [`BUILD-STEPS.md`](BUILD-STEPS.md) | step-by-step task list |

@@ -27,21 +27,32 @@ The product design goal is that no single party can join two channels together. 
 | **Tor** | anonymous network egress for the local HTTP fetcher (channel 1) |
 | **Stateless HTTP fetcher** | validates public HTTP(S) destinations and redirects, routes through Tor, bounds time/body size, and retains no browser state (channels 1+2) |
 | **STRK20 privacy pool + `@starkware-libs/starknet-privacy-sdk`** | shielded balances and confidential transfers — the on-chain privacy engine (channel 3) |
+| **x402 v2 paywall flow** | `pay_paywall` reads `PAYMENT-REQUIRED`, submits the STRK20 withdrawal + `privacy_invoke`, then retries with `PAYMENT-SIGNATURE`; the merchant validates the public receipt |
 | **STRK20 shadow accounts** (`strk20ShadowAccountCommitment`) — ⚠️ **roadmap, not MVP** | **a fresh, unlinkable on-chain identity per task/site**, mutually unlinkable and unlinkable to the user's real account; the *partial commitment* would let us credit a user's balance **without learning which shadow account or linking them** (channels 3+5). **Status:** in the spec and starknet.js, but **absent from the shipping Ready wallet v5.33.8** — so the MVP must not depend on it (see `SPIKE-RESULTS.md` §9) |
-| **Local SDK wallet (experimental)** | used only when `PAY_ENABLED=true` and key configuration is supplied; the current server process holds that key, so this is self-hosted testnet tooling rather than a non-custodial production wallet |
+| **Local SDK wallet** | used after the local wallet is created, funded, deployed, and given an AVNU paymaster key; the current server process holds that key, so this is self-hosted testnet tooling rather than a non-custodial production wallet |
 | **AVNU `sponsored_private` paymaster** | gasless txs where the **fee is paid from inside the pool** — so paying gas doesn't deanonymize the payer (channels 3+5) |
 | **OHTTP (`ohttp-ts`, RFC 9458)** | available in the underlying privacy SDK, but **not configured by this app**; operator blinding requires a real relay/gateway split (channel 5) |
-| **Viewing keys** | can decrypt private history; in the current opt-in server path, key material or its derivation input is local process configuration |
+| **Viewing keys** | can decrypt private history; in the current local server path, key material or its derivation input is local process configuration |
 | **Prepaid balance + off-chain metering + batched settlement** | roadmap only; no timing-decoupled metering service exists in the active server |
 | **Ready session keys + SNIP-9 outside execution** | roadmap only; not part of the active server |
+
+The merchant is a separate HTTP service. A real MCP paywall request must use a
+public HTTPS merchant origin (for local development, a temporary Cloudflare
+Quick Tunnel with `MERCHANT_TRUST_PROXY=1`); a direct localhost payer script is
+only a separate rehearsal path.
 
 ---
 
 ## 2.5. The precise claim for channel 2
 
-The active implementation is not a browser. It performs one HTTP request chain, reduces HTML to readable text, and discards the response after returning it. There is no cookie jar, cache, local storage, JavaScript runtime, or login flow.
+The active implementation is not a browser. It performs one HTTP request chain,
+reduces HTML to readable text, and discards the response after returning it.
+There is no cookie jar, cache, local storage, JavaScript runtime, or login flow.
 
-That removes persistent browser state, but it does not provide browser-fingerprint randomization or uniformity. The destination can still observe the HTTP/TLS behavior of the Node fetcher, and multiple requests may use the same Tor circuit. The earlier Obscura browser-worker experiment is not part of the current architecture.
+That removes persistent browser state, but it does not provide browser-fingerprint
+randomization or uniformity. The destination can still observe the HTTP/TLS
+behavior of the Node fetcher, and multiple requests may use the same Tor circuit.
+A browser-worker experiment is not part of the current architecture.
 
 ---
 
@@ -66,7 +77,10 @@ The current answer is self-hosting, not operator-blinding infrastructure:
 
 1. **The MCP endpoint is loopback-only.** It binds to `127.0.0.1`, so there is no public Tony Strk operator in the request path.
 2. **Browsing is stateless at the application layer.** The server has no cookie jar, browser profile, user database, or request log. The process and host can still observe a request while handling it.
-3. **Payments are off by default.** `pay` is registered only with `PAY_ENABLED=true` and complete wallet configuration. When enabled, this server process holds the supplied spending key; it is not the future client-side-wallet design.
+3. **Payments are explicit.** The local wallet must be ready before `pay` can
+   spend, and `pay_paywall` additionally requires a configured
+   `PAYWALL_ANONYMIZER_ADDRESS`. When used, this server process holds the local
+   spending key; it is not a client-side-wallet design.
 4. **OHTTP is not configured.** The repository has no deployed relay/gateway split, so it makes no current claim that RPC, prover, discovery, or paymaster operators cannot link connection metadata to requests.
 
 A future hosted service would need separate trust domains and an independently operated OHTTP relay/gateway before making stronger operator-resistance claims.
@@ -98,14 +112,18 @@ What one active browse request does:
 4. The server returns at most 1 MiB and reduces HTML to readable text unless raw output was requested.
 5. The request ends without retaining cookies, a browser profile, or an MCP session.
 
-If experimental `pay` is enabled, it runs in the same local process with the configured key. It should not be described as an isolated, client-side, OHTTP-protected production payment flow.
+If `pay` or `pay_paywall` is used, it runs in the same local process with the
+configured key. A `wallet_shield` deposit must mature for 12 blocks before its
+private note can fund a proof. The flow should not be described as isolated,
+client-side, or OHTTP-protected production payment infrastructure.
 
 ---
 
 ## 6. Rules we don't break
 
 1. Shared canonical pool only — never our own pool.
-2. Payment stays disabled unless the local operator explicitly enables and configures it.
+2. Payment requires an explicit tool call, a ready local wallet, and the
+   configured helper trust decision.
 3. Do not claim browsing/payment worker isolation until separate workers exist.
 4. Privacy claims cover **shielded STRK20 on Starknet only** — transparent rails (x402/Base USDC) are labeled transparent. See `THREAT-MODEL.md` §4.5.
 5. No logged-in browsing — authenticating *is* deanonymizing.

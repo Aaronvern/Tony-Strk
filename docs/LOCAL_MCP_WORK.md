@@ -2,49 +2,63 @@
 
 ## Purpose
 
-This document records the local MCP work that is complete.
-
-The server is local only. This work did not deploy a contract or send a payment by default.
+This document records the active local MCP server and its STRK20 x402 payment
+path. The server is loopback-only. Browsing uses Tor, and payment is explicit:
+the local wallet must be ready, a helper must be named in
+`PAYWALL_ANONYMIZER_ADDRESS`, and the user must choose to call a payment tool.
 
 ## What Works Now
 
-1. The MCP server listens on `127.0.0.1:8787`.
+1. The MCP server exposes Streamable HTTP at `127.0.0.1:8787/mcp`.
 
-2. The `browse` tool uses Tor at `127.0.0.1:9050`.
+2. The `browse` tool accepts public HTTP(S) URLs and fetches them through the
+   configured Tor SOCKS proxy.
 
 3. The tool stops if Tor is not available.
 
-4. The tool accepts public HTTP and HTTPS addresses only.
+4. The tool rejects local, private, metadata, multicast, and reserved addresses.
 
-5. The tool rejects local, private, metadata, multicast, and reserved addresses.
+5. The tool repeats these address checks after each redirect.
 
-6. The tool repeats these address checks after each redirect.
+6. The tool limits a response to 1 MiB and stops after five redirects.
 
-7. The tool limits a response to 1 MiB and stops after five redirects.
+7. The local wallet saves its private key and passphrase in the macOS Keychain.
 
-8. The local wallet saves its private key and passphrase in the macOS Keychain.
+8. The `wallet_status` tool tells the agent when it must create, fund, deploy,
+   or configure the paymaster for the local wallet.
 
-9. The `wallet_status` tool tells the agent when it must create, fund, or deploy the local wallet.
+9. The `wallet_shield` tool deposits public Sepolia test STRK into the STRK20
+   pool and reports the receipt and conservative `spendableAfterBlock`.
 
-10. The old Obscura service is not part of the active server path.
+10. The `pay` tool sends a chosen amount to a Starknet address from the shielded
+    pool; `pay_paywall` handles the strict x402 v2 402 → payment → retry flow.
 
-11. The Railway deployment file was removed. The container uses loopback only.
+11. The payer verifies the merchant's helper, asset, resource, network, and
+    price ceiling before generating a proof. The merchant verifies the public
+    `PaywallPaid` receipt before serving protected content.
+
+12. `verify:x402` checks the live MCP, Tor, tool registration, and wallet status
+    without spending by default. Its `--live` mode is opt-in.
 
 ## What Does Not Work Yet
 
-1. An independent OHTTP relay is not configured. The payment path can use direct OHTTP encryption, but this does not hide the client IP.
+1. An independent OHTTP relay and gateway are not configured. Direct OHTTP
+   encryption is not operator blinding.
 
-2. A real OHTTP setup needs relay URLs from an independent provider. It also needs a pinned public key configuration.
+2. The active fetcher is not a browser. It has no JavaScript execution, login
+   support, cookie storage, or fresh Tor circuit guarantee per request.
 
-3. This work did not deploy a contract. The local check only compiles the contract.
+3. The guided x402 payment flow is Sepolia-only. Mainnet pool operations are a
+   separate capability; do not present them as mainnet paywall settlement.
 
-4. The active fetcher is not a browser. It has no login support, cookie storage, or fresh Tor circuit per request.
+4. A live paywall run needs a public HTTPS merchant URL. Tor cannot reach the
+   merchant's loopback listener, and the MCP URL policy correctly rejects it.
 
 ## Run the Local Server
 
-1. Install Node.js 24 and Tor.
+1. Install Node.js 24 and Tor. The privacy SDK requires Node 24.
 
-2. Start Tor on `127.0.0.1:9050`.
+2. Start Tor on the SOCKS URL used below, normally `127.0.0.1:9050`.
 
 3. Run this command from the project root.
 
@@ -80,58 +94,119 @@ Add the server to Claude Code.
 claude mcp add --scope user --transport http tony-strk http://127.0.0.1:8787/mcp
 ```
 
-Both clients connect to the same local endpoint. No API key is required.
-
-The `browse` tool is active after the server starts. The `pay` tool reports the next wallet step until the wallet is ready.
+Both clients connect to the same local endpoint. No API key is required for
+the MCP endpoint itself.
 
 ## Prepare the Local Wallet
 
-1. Run `npm run wallet:setup` on macOS.
+Run the following lifecycle in order:
 
-2. Fund the printed Sepolia address with test STRK.
+1. Run `npm run wallet:setup` on macOS. It creates the wallet and stores the
+   AVNU paymaster key in Keychain when needed.
 
-3. Call `wallet_status` from Codex or Claude Code.
+2. Fund the printed Sepolia address with public test STRK. The first shield
+   must cover the desired private balance and the current pool fee.
 
-4. When the state is `needs_deployment`, call `wallet_deploy`.
+3. Call `wallet_status` from Codex or Claude Code. When the state is
+   `needs_deployment`, call `wallet_deploy`.
 
-5. When the state is `needs_paymaster`, run `npm run paymaster:set` and paste the AVNU key.
+4. If the paymaster state is still missing, obtain an AVNU key from the AVNU
+   portal and run `npm run paymaster:set`.
 
-6. When the state is `ready`, the agent can call `pay` automatically.
+5. When `wallet_status` reports `ready`, call `wallet_shield` with a positive
+   decimal amount. It does not pay a merchant automatically.
 
-The macOS Keychain stores the private key and privacy passphrase. The MCP tools return only public values.
+6. Wait for the returned `spendableAfterBlock`. A new deployment, top-up, or
+   private note needs 12 blocks of maturity before the next proof.
+
+7. Set `PAYWALL_ANONYMIZER_ADDRESS` to a helper contract you have chosen to
+   trust, then start the MCP server with the configured Tor proxy.
+
+The pool fee is read from the external stack and must not be hardcoded in a UI.
+Wallet and API credentials stay in Keychain; transaction hashes, block numbers,
+and explorer URLs are the public setup outputs.
+
+## Run the Merchant and x402 Flow
+
+The merchant is a separate HTTP service. Start it with proxy trust enabled,
+then expose its loopback port through a temporary Cloudflare Quick Tunnel.
+
+```sh
+MERCHANT_TRUST_PROXY=1 npm run start:merchant
+cloudflared tunnel --url http://127.0.0.1:8788
+```
+
+Use the tunnel's public `https://` URL for the real MCP flow. The
+`MERCHANT_TRUST_PROXY=1` setting keeps that public origin in the merchant's
+advertised x402 resource, so the payer's resource check succeeds.
+
+The standalone payer is a different, direct localhost path. It is useful for a
+dry rehearsal but does not exercise the MCP's public-URL and Tor boundary:
+
+```sh
+npm run pay:paywall -- http://127.0.0.1:8788/article/agent-privacy --dry
+```
+
+The real agent path uses `pay_paywall` through MCP with the public HTTPS URL.
+Run the verifier first; add `--live` only when the wallet is ready and the
+shielded note is mature.
+
+```sh
+npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL
+npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live
+```
 
 ## Do the Checks
 
-1. Run `npm test`. The web package has four tests. The server package has 31 tests.
+1. Run `npm test`. This runs the web, server, and merchant deterministic tests.
 
-2. Run `npm run build`. This builds the web application.
+2. Run `npm run build`. This builds the static web application.
 
-3. Run `npm run build:contracts`. This compiles the Cairo contract. It does not deploy the contract.
+3. Run `npm run build:contracts`. This compiles the Cairo contract. It does not
+   deploy the contract.
 
-4. Run `npm run verify:mcp` while the local server is active. This calls the Tor Project endpoint through MCP.
+4. Run `npm run verify:mcp` while the local server is active. This calls the Tor
+   Project endpoint through MCP.
+
+5. Run `npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL` for a no-spend
+   preflight, or append `--live` for an opt-in Sepolia payment.
 
 ## Code References
 
-1. [MCP server startup](../server/src/index.ts) loads the local settings and starts the loopback server.
+1. [MCP server startup](../server/src/index.ts) loads local settings and starts
+   the loopback server.
 
-2. [Browse policy](../server/src/tools/url-policy.ts) blocks unsafe target addresses.
+2. [Browse policy](../server/src/tools/url-policy.ts) blocks unsafe target
+   addresses.
 
-3. [Browse tool](../server/src/tools/browse.ts) handles redirects, timeouts, and response size limits.
+3. [Browse tool](../server/src/tools/browse.ts) handles redirects, timeouts,
+   response size limits, and x402 response headers.
 
-4. [Tor fetcher](../server/src/tor/tor-fetch.ts) sends each approved request through the Tor SOCKS proxy.
+4. [Tor fetcher](../server/src/tor/tor-fetch.ts) sends each approved request
+   through the Tor SOCKS proxy.
 
-5. [Payment gate](../server/src/mcp/server.ts) adds `pay` only when local payment is enabled.
+5. [Wallet lifecycle](../server/src/pay/wallet-manager.ts) creates, deploys,
+   shields, and reports note maturity.
 
-6. [Live MCP check](../server/verify-mcp.mjs) proves that the destination saw a Tor exit.
+6. [Payment gate](../server/src/mcp/server.ts) registers `pay_paywall` only
+   when a trusted anonymizer is configured.
 
-7. [Local design](superpowers/specs/2026-08-21-local-mcp-hardening-design.md) states the active security boundary.
+7. [Live x402 check](../server/verify-x402.mjs) proves the MCP/Tor preflight and
+   optionally spends test STRK against a public merchant URL.
+
+8. [Local design](superpowers/specs/2026-08-21-local-mcp-hardening-design.md)
+   states the active security boundary.
 
 ## External References
 
-1. [Model Context Protocol](https://modelcontextprotocol.io) defines the tool protocol.
+1. [Model Context Protocol](https://modelcontextprotocol.io) defines the tool
+   protocol.
 
-2. [Tor Project check](https://check.torproject.org/api/ip) reports whether the request used a Tor exit.
+2. [Tor Project check](https://check.torproject.org/api/ip) reports whether the
+   request used a Tor exit.
 
-3. [OHTTP RFC 9458](https://www.rfc-editor.org/rfc/rfc9458) defines Oblivious HTTP.
+3. [OHTTP RFC 9458](https://www.rfc-editor.org/rfc/rfc9458) defines Oblivious
+   HTTP.
 
-4. [StarkWare Privacy SDK](https://github.com/starkware-libs/starknet-privacy/blob/main/sdk/README.md) describes relay URLs and pinned public key configuration.
+4. [StarkWare Privacy SDK](https://github.com/starkware-libs/starknet-privacy/blob/main/sdk/README.md)
+   describes relay URLs and pinned public key configuration.

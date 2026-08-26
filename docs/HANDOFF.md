@@ -1,156 +1,126 @@
-# Handoff — 2026-08-24
+# Handoff — 2026-08-26
 
-> Product shape: **local-first**. The MCP server binds `127.0.0.1`, there is no
-> hosted deployment, and OHTTP is off until real relay values exist. That was
-> settled by #17 and supersedes the remote-MCP plan in `docs/PLAN.md`.
+> Product shape: **local-first**. The MCP server binds to `127.0.0.1`, the
+> merchant is a separate HTTP service, and OHTTP remains opt-in until a real
+> relay/gateway split is operated.
 
-Where Tony Strk actually stands, what is proven versus claimed, and what to do
-next. Deadline **2026-08-31 23:59 UTC**, so seven days.
+This is the current implementation state after the STRK20 x402 work. The
+guided target is Starknet Sepolia with test STRK. No mainnet paywall claim is
+made.
 
-## The scoreboard
+## The active path
 
-`strk20.json` is the entry. It currently reads:
-
-```json
-{ "transactions": [], "contracts": [], "demo_video": "", "demo_url": "https://tony-strk.vercel.app" }
+```text
+create wallet → fund public account → deploy → store AVNU key
+    → wallet_shield → wait 12 blocks → pay_paywall
 ```
 
-To be scored at all the hub needs **three mainnet transactions that touched the
-STRK20 pool**, a **3-minute demo video**, and a **live demo**. Sepolia does not
-count. Of 99 projects only 11 had mainnet and 4 had a video, so clearing both
-puts the project in a small group.
+The local MCP exposes Streamable HTTP at `127.0.0.1:8787/mcp`. `browse` sends
+public HTTP(S) requests through Tor. `pay_paywall` reads a canonical x402 v2
+402 response, checks the helper/asset/resource/network/price terms, submits the
+STRK20 `withdraw` + `privacy_invoke` action list, and retries with
+`PAYMENT-SIGNATURE`. The merchant checks the public `PaywallPaid` receipt and
+returns protected content with `PAYMENT-RESPONSE`.
 
 ## What is proven
 
-Proven means verified on-chain or by a passing test, not asserted.
+Proven means verified by tests or on-chain evidence, not a product promise.
 
-- **`browse` through real Tor.** `IsTor:true`, different exit IPs across runs. A
-  402 surfaces as `paymentRequired` in `structuredContent` — the seam the
-  payment half is supposed to plug into.
-- **The anonymizer contract.** Deployed on Sepolia at
-  `0x767a1daf3503e51882e88f6d4f1ef510517895ed0c91f8847bbf85eb9d389d`
-  (class `0x39cd30ef…`). A real payment settled in
-  [`0x94c9a566…82cf5`](https://sepolia.voyager.online/tx/0x94c9a56632651bff50ae2e5096394de0c96e1f405900d1c82e1a27e5882cf5):
-  pool withdrew 0.1 STRK to the helper, merchant received exactly 0.05,
-  `PaywallPaid` emitted on the resource hash, 0.05 change pulled into an open
-  note, helper left holding nothing. 17 snforge tests, including two hostile
-  ERC20s (fee-on-transfer, re-entrant).
-- **Tests.** web 4, server 44, Cairo 17 — 65 in total, green on Linux.
-- **SSRF hardening on `browse`** (#17): private, loopback, cloud-metadata and
-  credential-bearing URLs rejected, redirect targets checked, response size and
-  time capped, IPv6 translation prefixes handled.
+- **Tor browsing.** The MCP path returns `IsTor:true` from the Tor Project
+  endpoint when Tor is running.
+- **The anonymizer contract.** The Sepolia helper is deployed, its Cairo tests
+  cover hostile ERC-20 behavior, and a real direct settlement has emitted the
+  expected merchant receipt.
+- **Wallet shielding.** `wallet_shield` submits one configured-token `deposit`,
+  waits for its receipt, and reports the conservative block at which the note
+  can be used.
+- **Strict x402 v2.** Merchant and payer agree on Base64-encoded
+  `PAYMENT-REQUIRED`, `PAYMENT-SIGNATURE`, and `PAYMENT-RESPONSE` headers. The
+  payer has no legacy header fallback.
+- **Joined MCP flow.** A deterministic test starts both HTTP services, uses the
+  official MCP client, crosses the 402 and signed retry, and receives protected
+  content without spending funds.
+- **Live verifier.** `verify:x402` performs a no-spend preflight by default and
+  has an explicit `--live` mode for a public HTTPS merchant URL.
 
-## What is not
+## What remains bounded
 
-- **`pay` has never moved money.** Every test uses a fake wallet.
-- **The two halves do not connect.** No merchant, no 402 handshake, no payment
-  page. `browse` finds a paywall; nothing pays it.
-- **Nothing is deployed, by design now.** #17 removed `railway.json` and made
-  the server local-only. `demo_url` still points at the Vercel landing page,
-  which now reads "LOCAL MAP · NO FETCH · NO WALLET · NO PAYMENT" and states it
-  does not send the request, use a wallet, or process a payment.
+- **Sepolia only.** The guided x402 verifier spends test STRK on Sepolia.
+  Mainnet pool operations are separate, and mainnet paywall settlement is not
+  represented as complete while the required prover/wallet route is absent.
+- **Public merchant origin required.** The MCP URL policy rejects localhost and
+  Tor cannot reach a loopback merchant. A temporary Cloudflare Quick Tunnel is
+  the local-development route.
+- **No operator blinding.** OHTTP is not configured; RPC, discovery, prover,
+  paymaster, and the local host retain their stated metadata visibility.
+- **No browser session.** The fetcher does not execute JavaScript, keep cookies,
+  support logins, or guarantee a fresh Tor circuit per request.
+- **No live spend in deterministic tests.** A live run still needs Node 24, Tor,
+  a funded/deployed wallet, an AVNU key, a trusted helper, mature notes, and a
+  public merchant URL.
 
-  **This is a scoring tension worth a decision.** The page is maximally honest,
-  and honesty has been the right instinct on this project. But the hub weights
-  "working mainnet" at 30% and requires a live demo, and a public page that
-  disclaims everything gives a judge nothing to see. The mainnet transactions
-  below do not fix that on their own — something has to *show* them.
+## Setup handoff
 
-## The finding that shapes the plan
+Use the static guide at [`/setup`](../web/app/setup/page.js). The essential
+sequence is:
 
-**The anonymizer cannot be exercised on mainnet today.** Both routes are closed:
+1. Install Node 24, npm, Tor, and the privacy SDK with `npm install` and
+   `npm run setup`.
+2. Run `npm run wallet:setup`, fund the printed Sepolia address, and ask the
+   MCP client for `wallet_status`.
+3. Call `wallet_deploy` when the state requires it.
+4. Store an AVNU key with `npm run paymaster:set`.
+5. Call `wallet_shield` with a positive amount. The first shield covers both
+   the private balance and the pool fee.
+6. Wait at least 12 blocks after the shield receipt (use
+   `spendableAfterBlock`).
+7. Set `PAYWALL_ANONYMIZER_ADDRESS` to the helper contract you trust.
+8. Start the merchant with `MERCHANT_TRUST_PROXY=1`, expose port 8788 with
+   `cloudflared tunnel --url http://127.0.0.1:8788`, then start the MCP through
+   Tor.
+9. Connect Codex or Claude Code and call `pay_paywall` with the tunnel's public
+   HTTPS URL.
 
-1. **SDK route** — the mainnet proving service URL is unpublished. Three issues
-   asking for it are open and unanswered (#121, #124, #135). Do not open a
-   fourth.
-2. **Wallet route** — Ready does not implement the private-DeFi actions.
-   Probed on Sepolia against a wallet advertising Wallet API 0.10.3:
+The standalone `npm run pay:paywall -- http://127.0.0.1:8788/... --dry` command
+is a direct localhost payer. It is a separate rehearsal path and does not
+exercise the real MCP flow's public-HTTPS and Tor requirements.
 
-   | Action | Result |
-   | --- | --- |
-   | `deposit`, `withdraw` (self and contract), `transfer` (concrete amount) | accepted |
-   | `transfer` with `amount: "OPEN"` | `INVALID_REQUEST_PAYLOAD` |
-   | `invoke` | `INVALID_REQUEST_PAYLOAD` |
+## Verification commands
 
-   A concrete-amount transfer is accepted, so the action type works and it is
-   the `"OPEN"` literal that is refused. `invoke` fails alone, with no open note
-   present, so it is independently unsupported. Reproduce with
-   `web/app/spike/wallet` → "Probe payload shapes".
+```bash
+npm test
+npm run build
+npm run verify:mcp
+npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL
+npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live
+```
 
-This is an ecosystem gap, not a defect in the contract. **Mainnet pool
-transactions are still reachable**: `deposit`, `transfer` and `withdraw` all
-touch the pool and Ready does all three. That is how the rival projects with
-verified mainnet hashes got them.
+The first x402 command spends nothing. Append `--live` only when the mature
+shielded note and public merchant are ready; it spends Sepolia test STRK.
 
-## Next steps, in order of what moves the score
+## Gotchas
 
-1. **Three mainnet pool transactions via Ready.** Shield, private transfer,
-   unshield. Each costs the flat pool fee (2 STRK on Sepolia; read mainnet's
-   from `get_fee_amount`, it was 4 STRK when the official skill was written).
-   Put the hashes in `strk20.json` and `docs/TRANSACTIONS.md`.
-2. **Deploy the anonymizer to mainnet.** A declare + deploy is not a pool
-   transaction, but it fills the empty `contracts` array and feeds the hub's
-   assessment, which explicitly rewards deployed Cairo. Does not need `invoke`.
-3. **The 3-minute video.**
-4. **A live demo that does not disclaim itself.**
+- Use `https://starknet-sepolia-rpc.publicnode.com` unless
+  `STARKNET_RPC_URL` intentionally overrides it; the older default does not
+  provide the class lookup required by `wallet_status`.
+- The proving state is behind the head. Notes younger than 12 blocks can pass a
+  dry rehearsal and still fail submission with `NOTE_NOT_FOUND`.
+- The paymaster refuses to broadcast a reverting transaction, so a failed
+  proof may have no explorer hash.
+- Pool fees are read from the external stack. Do not hardcode a Sepolia fee or
+  treat it as a mainnet quote.
+- The helper named in `PAYWALL_ANONYMIZER_ADDRESS` receives the withdrawn funds
+  during `privacy_invoke`; only trust a helper you selected.
+- Keep wallet keys, passphrases, viewing material, and API keys in Keychain or
+  the local secret store. Do not put literal credentials in docs, logs, or
+  committed environment files.
 
-## Settled since
+## Scope decisions
 
-- **#17 merged** — local MCP, Keychain wallet, SSRF policy, Railway removed.
-  Its Keychain tests failed on Linux because the platform check ran at store
-  construction, before the injected `exec` the tests supply; the check now sits
-  in the real backend, so the store is testable anywhere and a Linux caller that
-  actually reaches for the Keychain still gets a clear error.
-- **#18 merged** — per-gateway OHTTP relays and pinned key configs. Resolved
-  against #17 by keeping OHTTP off by default (`OHTTP_ENABLED === "true"` to opt
-  in) while staying configurable.
-- `.env.example` had `OHTTP_RELAY_URL` declared twice after the merge; the
-  browse-side variables are now `OHTTP_BROWSE_GATEWAY_*` and are **not read by
-  any code** yet.
-
-## Still open
-
-- **The demo surface.** See the scoring tension above.
-- **`docs/PLAN.md`** still describes the remote architecture and is marked
-  superseded rather than rewritten.
-
-## Gotchas that cost real time
-
-- **Note maturity.** Proofs build against `latest - 12`, but a dry run
-  simulates against live state. A note younger than 12 blocks makes the dry run
-  pass and the submission revert with `NOTE_NOT_FOUND`, raised by `use_note`
-  inside the prover's *virtual* block. Wait ~6 minutes after funding.
-- **The paymaster refuses to broadcast a reverting transaction**, so failed
-  attempts cost nothing and leave no hash on-chain — which also means they
-  cannot be traced in an explorer.
-- **The SdkWallet path has no surplus sink.** Note selection is naive and takes
-  a whole note, so a small withdraw from a large note leaves a surplus the
-  builder refuses. The STRK20 action vocabulary has no surplus action; add an
-  explicit `transfer` or `withdraw` back to the payer.
-- **Review against the deployed class, not upstream `main`.** The
-  `OpenNoteScreeningPolicy` caveat in an earlier review does not apply to either
-  live pool — `get_open_note_screening_policy` exists on neither the Sepolia
-  (`0x56ab118a…`) nor the mainnet (`0x67dddd89…`) deployment.
-- **starknet.js pads gas price 1.5× as well as amount**, so a large declare
-  fails with "Resources bounds … exceed balance". Trim the price to ~1.15× of
-  the live block price. Both bound fields must be `bigint` or the fee hash
-  concatenates them.
-- **RPC**: drpc's Sepolia endpoint lacks `starknet_specVersion` and
-  `getClassHashAt`. Use `https://starknet-sepolia-rpc.publicnode.com`.
-- **sncast 0.63** renamed the Ready account type to `--type ready`.
-- **The faucet** binds its proof-of-work to the address as it normalizes it
-  (lowercase, padded), and has a 24h per-address cooldown.
-- **`npm run typecheck` is a no-op** — there is no `tsconfig.json`.
-
-## Security note
-
-`0x077F1679D6B758f63b33Ac3eba46c33b0218185156efc9041cB4ba1A2162FC87` is
-**Aaron's real wallet**, deployed on both Sepolia and mainnet, holding ~49.87
-STRK on mainnet. Its key is in `.env` in plaintext. It was described in earlier
-notes as a burned testnet key; that was wrong. Never `sncast account import` it
-— that writes the key to `~/.starknet_accounts/` outside the repo and outside
-`.gitignore`. Deploy with starknet.js, which signs from memory.
-
-The Ready wallet holds a **different** account,
-`0x2b33a28cccde91013a8508d4353682291dffe967a147442f0226c9ecc7b401c`, funded with
-100 Sepolia STRK and registered in the pool.
+- Shared canonical STRK20 pool only; never create a private pool of one.
+- Local MCP and merchant remain separate services.
+- Payment requires an explicit tool call and a ready wallet; shielding never
+  pays a merchant automatically.
+- Privacy claims cover Tor egress, stateless fetches, and shielded STRK20 only.
+  They do not promise fresh circuits, browser-fingerprint protection, or
+  operator blinding.

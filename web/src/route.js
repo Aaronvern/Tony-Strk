@@ -1,8 +1,8 @@
 const steps = [
   ["01", "Route input", "The browser validates a public HTTP(S) destination locally."],
-  ["02", "MCP browse (separate)", "The local MCP tool is separately runnable; the landing page does not invoke it."],
-  ["03", "Isolated worker (when run)", "With Obscura and Tor configured, the MCP tool creates one short-lived browser context."],
-  ["04", "Optional OHTTP", "Configured OHTTP uses relay and gateway services with no direct-worker fallback."],
+  ["02", "MCP browse through Tor", "The local MCP server fetches the public destination through the configured Tor SOCKS proxy."],
+  ["03", "x402 paywall (when configured)", "The MCP can inspect canonical payment terms and pass them to the configured payer."],
+  ["04", "STRK20 settlement", "The wallet withdraws to the trusted anonymizer, invokes it, and retries with the receipt."],
 ];
 
 export function buildRoute(value) {
@@ -15,6 +15,6 @@ export function buildRoute(value) {
   return {
     target: url.hostname,
     steps: steps.map(([number, label, detail]) => ({ number, label, detail })),
-    payment: 'Not enabled in this demo',
+    payment: 'STRK20 x402 settlement is available through the local MCP.',
   };
 }

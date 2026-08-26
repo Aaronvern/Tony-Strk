@@ -70,6 +70,9 @@ Keychain, or `ACCOUNT_PRIVATE_KEY` in the environment where there is no Keychain
 `pay_paywall` is not even registered unless `PAYWALL_ANONYMIZER_ADDRESS` names a
 helper contract you have chosen to trust.
 
+The complete setup, including wallet shielding and a public merchant tunnel, is
+in [`/setup`](web/app/setup/page.js) when the web app is running.
+
 ---
 
 ## Privacy model
@@ -121,7 +124,7 @@ Building in public, daily. Honest state — nothing is listed as working before 
 - [x] **A paywall that takes anonymous payment** — merchant verifies a `PaywallPaid` receipt from the chain and never learns who paid
 - [x] **The agent does it alone** — `pay_paywall` over MCP: browse → 402 → settle → read, in [`0x37e3d5ad…`](https://sepolia.voyager.online/tx/0x37e3d5ad03efa7a4ef0890d16685f8808ae3160270827506aca83eda967c5a2)
 - [x] **Wallet-driven pool operations** — shield and unshield through Ready, from [`/pool`](#pool-console)
-- [x] 149 tests — web 11, server 84, merchant 37, Cairo 17
+- [x] 178 tests — web 13, server 91, merchant 57, Cairo 17
 
 **Not done:**
 
@@ -157,7 +160,7 @@ TypeScript runs directly on Node 24's type stripping, so there is no build step 
 ## Quickstart
 
 ```bash
-nvm use            # Node 24 (required by ohttp-ts, and for running .ts directly)
+nvm use            # Node 24 (required by the privacy SDK and for running .ts directly)
 npm install
 npm run setup      # builds the privacy SDK from source (not on npm)
 
@@ -170,6 +173,11 @@ npm run verify:mcp        # drive the running MCP server with a real MCP client
 npm run spike:services    # verify every external dependency is live
 npm run spike:wallet      # drive the STRK20 wallet API headlessly
 ```
+
+For the payment path, follow [`/setup`](web/app/setup/page.js) or run
+`npm run wallet:setup`, fund and deploy the printed Sepolia account, store the
+AVNU key, call `wallet_shield`, and wait for its 12-block maturity before
+calling `pay_paywall`.
 
 ## Connect an AI Agent
 
@@ -193,7 +201,9 @@ claude mcp add --scope user --transport http tony-strk http://127.0.0.1:8787/mcp
 
 Both clients use the same loopback-only server. No API key is required.
 
-The `browse` tool is available after the server starts. The `pay` tool reports the next wallet step until the wallet is ready.
+The `browse` tool is available after the server starts. `wallet_status` reports
+the next wallet step; `wallet_shield` adds public STRK to the private pool, and
+`pay_paywall` settles a configured x402 paywall.
 
 Read [`docs/LOCAL_MCP_WORK.md`](docs/LOCAL_MCP_WORK.md) for the full local setup and limits.
 
@@ -221,7 +231,14 @@ The private key and privacy passphrase stay in the macOS Keychain. The MCP clien
 
 Get an AVNU key from [AVNU](https://portal.avnu.fi). Then run `npm run paymaster:set` and paste it in your terminal.
 
-After `wallet_status` reports `ready`, the local agent can call `pay` automatically.
+After `wallet_status` reports `ready`, call `wallet_shield` with the amount of
+public Sepolia STRK to move into the pool. Wait until the returned
+`spendableAfterBlock` is at least 12 blocks past the shield receipt before
+calling `pay_paywall`. A shield does not pay a merchant automatically.
+
+Set `PAYWALL_ANONYMIZER_ADDRESS` to the helper contract you trust before
+starting the MCP server. `pay_paywall` refuses a different helper and a price
+above `PAYWALL_MAX_PRICE`.
 
 Requires `starknet@10.7.0` or later — npm's `latest` tag currently resolves to 10.0.2, which predates the STRK20 API.
 
@@ -259,13 +276,32 @@ sets one, and only the receipt, on the one URL that just asked for payment.
 
 
 The two halves, connected. `merchant/` is a paywalled site that takes anonymous
-payment; `scripts/pay-paywall.mjs` is the agent side that settles a 402.
+payment; `scripts/pay-paywall.mjs` is the standalone payer, while
+`pay_paywall` is the MCP tool used by an agent.
 
 ```bash
 npm run start:merchant                  # http://127.0.0.1:8788
 npm run pay:paywall -- http://127.0.0.1:8788/article/agent-privacy --dry
 npm run pay:paywall -- http://127.0.0.1:8788/article/agent-privacy
 ```
+
+Those `pay:paywall` commands are a direct localhost script path. They are
+distinct from the real MCP flow: the MCP's URL policy and Tor path require a
+public HTTPS merchant URL. For local development, run the merchant with
+`MERCHANT_TRUST_PROXY=1`, expose port 8788 with a Cloudflare Quick Tunnel, and
+pass the tunnel's HTTPS URL to `pay_paywall`.
+
+```bash
+MERCHANT_TRUST_PROXY=1 npm run start:merchant
+cloudflared tunnel --url http://127.0.0.1:8788
+TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server
+npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL
+npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live
+```
+
+The first verifier command performs a no-spend preflight. `--live` calls the
+real MCP tool and spends Sepolia test STRK only after the wallet is ready and
+the shielded note has matured.
 
 The merchant answers 402 with x402-shaped terms, the payer withdraws the price
 to the anonymizer and calls `privacy_invoke` in one pool transaction, and the
@@ -328,6 +364,11 @@ TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server
 # in another terminal
 npm run verify:mcp
 # → {"IsTor":true,"IP":"<a Tor exit>"}
+
+# with the merchant exposed at a public HTTPS URL
+npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL
+# add --live only to spend Sepolia test STRK
+npm run verify:x402 -- --url PUBLIC_HTTPS_MERCHANT_URL --live
 ```
 
 ---
@@ -341,9 +382,10 @@ Read [`docs/LOCAL_MCP_WORK.md`](docs/LOCAL_MCP_WORK.md) for a plain English reco
 | Doc | What's in it |
 |---|---|
 | [`START-HERE.md`](docs/START-HERE.md) | ⭐ onboarding — read this first |
+| [`/setup`](web/app/setup/page.js) | complete local wallet, merchant, and x402 setup |
 | [`local-mcp-hardening-design.md`](docs/superpowers/specs/2026-08-21-local-mcp-hardening-design.md) | current local architecture and security boundaries |
 | [`PRIVACY-STACK.md`](docs/PRIVACY-STACK.md) | current guarantees, planned layers, and residual leaks |
-| [`PLAN.md`](docs/PLAN.md) | archived remote MCP + Obscura proposal — superseded |
+| [`PLAN.md`](docs/PLAN.md) | archived remote MCP architecture proposal — superseded |
 | [`THREAT-MODEL.md`](docs/THREAT-MODEL.md) | archived threat model for the superseded proposal |
 | [`SPIKE-RESULTS.md`](docs/SPIKE-RESULTS.md) | what we verified first-hand, with evidence |
 | [`BUILD-STEPS.md`](docs/BUILD-STEPS.md) | step-by-step build guide |
