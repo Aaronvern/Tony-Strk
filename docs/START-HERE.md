@@ -7,7 +7,8 @@ Everything you need to understand Tony Stark and start contributing. ~10 minutes
 ## 1. What we're building
 
 **A local-only MCP server that lets an AI agent fetch public URLs through Tor and
-settle a compatible x402 paywall with shielded STRK20 test funds.**
+settle a compatible x402 paywall with shielded STRK20 funds on Sepolia or
+Mainnet.**
 
 An agent (Claude, Cursor, whatever) connects to the loopback HTTP endpoint. The
 active `browse` tool is a stateless HTTP fetcher, not a disposable browser: it
@@ -76,9 +77,13 @@ local path as keyless or non-custodial.
 | Path | How |
 |---|---|
 | **AVNU paymaster** | `apply_action`; or **`invoke_and_apply_action` when a deposit is involved** — the ERC-20 `approve` must run as the *user*, and under `apply_action` the executing account is the paymaster |
+| **Explicit public relay fallback** | submits the proven call from the configured public account when AVNU sponsorship is unavailable; that account and payment timing are visible on-chain |
 | STRK20-aware wallet | `WalletAccountV6.executeWithProof` |
 
-**So the paymaster is load-bearing, not a gasless nicety** — for a server-side agent it's how you transact at all. It still gives us fee privacy; that's now a bonus rather than the reason we chose it.
+**The paymaster is the private-submission path, not only a gasless nicety** —
+for a server-side agent it keeps the submitting account out of the transaction.
+When sponsorship is unavailable, the explicit public-relay fallback can submit
+the proof, but its account and payment timing are visible on-chain.
 
 ### Two constraints that shape everything
 
@@ -89,7 +94,10 @@ not an immediate operation.
 
 The planned product shape is therefore: prepaid shielded balance → usage metered **off-chain** → settlement in **batches**. That metering and batching layer is not implemented in the active server.
 
-Fees go through AVNU's paymaster in `sponsored_private` mode, where the fee is paid *from inside the pool*, so paying gas doesn't produce a transparent transaction pointing back at the payer.
+The AVNU path uses `sponsored_private` mode, where the fee is paid *from inside
+the pool*. The verified Mainnet runs used the explicit public-relay fallback
+because AVNU had no remaining sponsorship credits; those runs therefore expose
+the submitting account and payment timing.
 
 ---
 
@@ -134,10 +142,10 @@ Every deposit is screened against sanctions lists before a proof is issued — m
 | Local wallet lifecycle | ✅ create → fund → deploy → paymaster → shield → mature |
 | x402 v2 merchant + payer | ✅ deterministic flow through `pay_paywall` |
 | Joined MCP-to-merchant test | ✅ HTTP 402 → settlement → protected content |
-| Live x402 verifier | ✅ preflight; `--live` is opt-in and spends test STRK |
-| Mainnet paywall settlement | ⬜ Sepolia-only while mainnet prover/wallet support is unavailable |
+| Live x402 verifier | ✅ preflight; `--live` is opt-in and spends STRK on the configured network |
+| Mainnet paywall settlement | ✅ three live MCP x402 runs on 2026-08-30 through STRK20 + `PaywallAnonymizer`; public-relay fallback made the submitting account and timing visible ([transaction record](TRANSACTIONS.md)) |
 
-**The shield path works end to end** — SDK → hosted prover → ZK proof → paymaster → pool → Starknet:
+**The Sepolia shield path works end to end** — SDK → hosted prover → ZK proof → paymaster → pool → Starknet:
 
 ```
 tx 0x3e74d521285a305781153653c71f785f386acb10b409dcb60e2178a32489349
@@ -147,7 +155,7 @@ Screening was the one link nobody could test from outside — it runs *inside* t
 
 Reassuring side note: the pool holds **~212,000 STRK** across its users. That's the anonymity set we hide in — a real crowd, not a ghost town.
 
-**Known risks:** anonymity-set size still bounds how strong our privacy claim can be; the Sepolia fee quote (below) is not a real cost, so don't model economics on it; ~11 days left, and if we slip, the *browsing* layer gets cut, not the payment path.
+**Known risks:** anonymity-set size still bounds how strong our privacy claim can be; the Sepolia fee quote (below) is not a Mainnet cost, and the Mainnet public-relay fallback exposes submitting account and timing; the demo video and a permanent merchant deployment remain unfinished.
 
 ---
 
@@ -165,7 +173,7 @@ npm run spike:wallet     # drives the STRK20 wallet API headlessly
 
 `spike:services` checks the prover, discovery, advertised OHTTP keys, both pool contracts on-chain, and that the discovery service actually serves our pool. Seeing an OHTTP key verifies service capability; it does not configure a relay/gateway or establish operator blinding for this app.
 
-For browsing:
+For browsing and the verified Mainnet payment path:
 
 ```bash
 sudo apt install tor    # SOCKS5 on 127.0.0.1:9050
@@ -178,8 +186,10 @@ npm run verify:mcp
 No `.env` is needed for browsing. If a gitignored root `.env` exists, Node
 loads it; otherwise safe defaults apply. On macOS, keep wallet and AVNU
 credentials in Keychain. Configure a trusted
-`PAYWALL_ANONYMIZER_ADDRESS` before starting the MCP payment path. **Testnet
-keys only.**
+`PAYWALL_ANONYMIZER_ADDRESS` before starting the MCP payment path. The live
+Mainnet path uses `NETWORK=mainnet` and, when AVNU sponsorship is unavailable,
+the explicit `PUBLIC_PRIVACY_RELAY=true` fallback with real STRK; its public
+submitting account and payment timing are visible on-chain.
 
 ---
 
@@ -190,9 +200,10 @@ keys only.**
 3. **Node 24 or nothing** — the privacy SDK requires Node 24.
 4. **Starknet accounts must be deployed** before they can sign; an address exists counterfactually and fails confusingly until then.
 5. **The privacy SDK isn't on npm** — install from GitHub Packages or a git SHA.
-6. **A first shield must cover the fee.** The paymaster settles its fee from
-   the pool. Shield enough public Sepolia STRK for both the desired private
-   balance and the current pool fee; read the fee from the external stack.
+6. **A first shield must cover the fee.** The AVNU path settles its fee from
+   the pool; the public-relay path needs public gas as well. Shield enough
+   public STRK for the desired private balance and current pool fee, and read
+   the fee from the external stack.
 7. **Prove against `latest - 12`, never `latest`.** The sequencer rejects a proof whose base block is too recent (`The proof block number … is too recent`). This 12-block maturity rule is a hard failure, not a warning.
 8. **Pool fees are network and service values**, not UI constants. Do not model
    per-payment economics on a Sepolia quote.
@@ -208,14 +219,17 @@ Ordered by what the score rewards. See [`BUILD-STEPS.md`](BUILD-STEPS.md) for th
 
 The payment layer is a **real dependency you can build against** rather than a
 stub — `wallet_shield` and `pay_paywall` use the same configured `SdkWallet`,
-and the joined MCP test exercises the HTTP exchange without spending funds. The
-items below are labelled so roadmap work is not confused with active server
-capabilities.
+and three live Mainnet MCP x402 runs completed through the STRK20 pool and
+`PaywallAnonymizer` on 2026-08-30. Those runs used the explicit public-relay
+fallback because AVNU sponsorship had no remaining credits; see
+[`TRANSACTIONS.md`](TRANSACTIONS.md) for hashes and receipt blocks. The items
+below are labelled so roadmap work is not confused with active capabilities.
 
 - **Roadmap — MCP follow-up** — add `balance` / `topup` only when their wallet behavior is specified; metering and worker isolation are not implemented.
 - **Rehearsal — live paywall** — start the merchant behind a temporary public
   HTTPS tunnel, run `verify:x402` for preflight, then use `--live` only with
-  mature Sepolia notes.
+  mature notes and the intended network. Mainnet public-relay runs reveal the
+  submitting account and payment timing.
 - **Roadmap — browsing follow-up** — keep the current Tor HTTP fetcher hardened; add a browser worker only if JavaScript-rendered pages become a demonstrated requirement.
 - **Roadmap — viewing-key `reveal`** — decrypt and display the user's own spend history. Cheap to build, big narrative payoff.
 

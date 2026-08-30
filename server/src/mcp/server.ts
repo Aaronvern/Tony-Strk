@@ -74,7 +74,7 @@ export function createServer(deps: ServerDeps): McpServer {
       {
         title: "Show local wallet status",
         description:
-          "Use this before a payment. It reports whether the local Sepolia " +
+          "Use this before a payment. It reports whether the local Starknet " +
           "wallet needs creation, funding, deployment, a paymaster key, or is ready.",
         inputSchema: {},
       },
@@ -90,7 +90,7 @@ export function createServer(deps: ServerDeps): McpServer {
     server.registerTool(
       "wallet_create",
       {
-        title: "Create the local Sepolia wallet",
+        title: "Create the local Starknet wallet",
         description:
           "Create a fresh Starknet keypair in the macOS Keychain. Return the " +
           "public counterfactual address that the user must fund.",
@@ -110,7 +110,7 @@ export function createServer(deps: ServerDeps): McpServer {
       {
         title: "Deploy the funded local wallet",
         description:
-          "Deploy the local Sepolia account after the user funds its public " +
+          "Deploy the local account after the user funds its public " +
           "address. This sends a deployment transaction but does not pay anyone.",
         inputSchema: {},
       },
@@ -126,16 +126,16 @@ export function createServer(deps: ServerDeps): McpServer {
     server.registerTool(
       "wallet_shield",
       {
-        title: "Shield public test STRK",
+        title: "Shield public STRK",
         description:
-          "Shield public test STRK from this wallet into the STRK20 pool. This spends " +
-          "public test STRK; the resulting private note has a 12-block maturity and needs " +
+          "Shield public STRK from this wallet into the STRK20 pool. This spends " +
+          "public STRK; the resulting private note has a 12-block maturity and needs " +
           "12 blocks before it is spendable. It does not pay a merchant automatically. " +
           "Use wallet_status first.",
         inputSchema: {
           amount: z
             .string()
-            .describe('Amount of public Sepolia test STRK to shield, e.g. "1.5".'),
+            .describe('Amount of public STRK to shield, e.g. "1.5".'),
         },
         outputSchema: {
           transactionHash: z.string(),

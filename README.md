@@ -124,21 +124,19 @@ Building in public, daily. Honest state — nothing is listed as working before 
 - [x] **A paywall that takes anonymous payment** — merchant verifies a `PaywallPaid` receipt from the chain and never learns who paid
 - [x] **The agent does it alone** — `pay_paywall` over MCP: browse → 402 → settle → read, in [`0x37e3d5ad…`](https://sepolia.voyager.online/tx/0x37e3d5ad03efa7a4ef0890d16685f8808ae3160270827506aca83eda967c5a2)
 - [x] **Wallet-driven pool operations** — shield and unshield through Ready, from [`/pool`](#pool-console)
+- [x] **Three Mainnet MCP x402 runs** — Tor → 402 → STRK20 proof → `PaywallPaid` → HTTP 200; hashes are in [`strk20.json`](strk20.json)
 
 **Not done:**
 
-- [ ] **Mainnet pool transactions** — `strk20.json` is still empty
 - [ ] Demo video
 - [ ] A permanent public deployment of the merchant
 - [ ] External audit of the Cairo contract
 
-**Blocked, and not by us.** The paywall runs on Sepolia only. Our anonymizer
-cannot be reached on mainnet by any route currently available: the SDK path has
-no published mainnet prover, and the wallet path does not implement `invoke` —
-see [`/spike/wallet`](#wallet-capability-probe), which demonstrates exactly that.
-The contract is real, tested and deployed; the ecosystem cannot call it there
-yet. Mainnet activity is therefore plain pool operations, not paywall payments,
-and this README does not pretend otherwise.
+**Mainnet is now proven.** The hosted Mainnet prover and discovery service are
+live, and the helper is deployed. Three real MCP x402 runs completed on
+2026-08-30. AVNU sponsorship had no remaining credits, so those runs used the
+explicit public-relay fallback: the STRK20 proof and merchant receipt are real,
+but the submitting account and payment timing are public on-chain.
 
 ---
 
@@ -249,10 +247,9 @@ Sepolia and it reports, rung by rung, which STRK20 actions the wallet accepts:
 `transfer` with amount `"OPEN"` and **not** `invoke` — each refused with a bare
 `INVALID_REQUEST_PAYLOAD` that names no cause.
 
-That is the central constraint on this project. Our anonymizer cannot be
-reached on mainnet by any route available to us: the SDK path has no published
-mainnet prover, and the wallet path has no `invoke`. The contract is real,
-tested and deployed — the ecosystem cannot call it there yet.
+That probe still documents the extension limitation, but it is no longer a
+Mainnet blocker: the local SDK path can prove the `invoke`, then submit through
+AVNU or the explicit public-relay fallback.
 
 It is kept runnable because a negative result nobody can reproduce is
 indistinguishable from not having tried.
@@ -299,14 +296,15 @@ npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy --live
 ```
 
 The first verifier command performs a no-spend preflight. `--live` calls the
-real MCP tool and spends Sepolia test STRK only after the wallet is ready and
-the shielded note has matured.
+real MCP tool and spends STRK on the configured network only after the wallet
+is ready and the shielded note has matured.
 
 The merchant answers 402 with x402-shaped terms, the payer withdraws the price
 to the anonymizer and calls `privacy_invoke` in one pool transaction, and the
 merchant verifies the `PaywallPaid` receipt on-chain before unlocking. The
-merchant learns that it was paid and nothing else: the pool is the caller and
-the helper is the sender of record, so no payer appears anywhere.
+With AVNU private submission, the merchant learns the public receipt but no
+payer appears in it. With `PUBLIC_PRIVACY_RELAY=true`, the submitting account
+is visible on-chain and must not be described as anonymous.
 
 Proven on Sepolia in
 [`0x604e2104…`](https://sepolia.voyager.online/tx/0x604e2104c397a22a78a200a4a05884308131a7bb19385a7af05185900dd9d13):

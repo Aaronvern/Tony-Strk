@@ -19,6 +19,8 @@ import {
  */
 
 export interface SettleDeps extends BrowseDeps {
+  /** x402 network identifier expected from the merchant. Sepolia by default. */
+  network?: string;
   /** Null when no spending key is available, which is the hosted default. */
   getWallet: () => Promise<PayWallet | null>;
   /** The payer's own address — the surplus sink pays back to it. */
@@ -124,6 +126,7 @@ export async function settlePaywall(
         : deps.maxPrice;
 
   const terms: PaymentTerms = parsePaymentRequiredHeader(first.paymentRequiredHeader, {
+    network: deps.network,
     trustedAnonymizers: deps.trustedAnonymizers,
     maxPrice: ceiling,
     asset: deps.asset,

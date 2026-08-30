@@ -14,10 +14,10 @@ Do this first: the leaderboard ranks by *most recent push*, so existing early an
 | --- | --- | --- | --- |
 | 1 | ✅ Create the **public GitHub repo** | [YOU] | `Aaronvern/Tony-Strk` |
 | 2 | ✅ Commit docs + README | [ME] | pushed |
-| 3 | ⬜ **Submit the application PR** — the hackathon entry | [BOTH] | PR open, tracked by StarkWare |
+| 3 | ✅ **Submit the application PR / registry entry** — the hackathon entry is registered | [BOTH] | registry entry merged; push the prepared `strk20.json` before the deadline |
 | 4 | ✅ Pin toolchain: **Node 24**, `starknet@10.7.0` (`latest` = 10.0.2 is too old) | [ME] | `.nvmrc` + lockfile committed |
 
-⚠️ Step 3 is the actual entry. Nothing else counts until it's in.
+✅ Step 3 was the actual entry; the application/registry record is now present.
 
 ---
 
@@ -46,7 +46,7 @@ Everything else is normal engineering; *this* is the part that must work. We use
 | # | Step | Who | Done when |
 | --- | --- | --- | --- |
 | 12 | Scaffold the **remote MCP server** (auth, transport, tool registry) | [ME] | Claude connects and lists tools |
-| 13 | Wallet adapter **behind an interface** (Sepolia-hosted now, Ready-extension later) | [ME] | one swappable module |
+| 13 | Wallet adapter **behind an interface** (configured network now, Ready-extension later) | [ME] | one swappable module |
 | 14 | Tools: **`topup`** + **`balance`** backed by real shielded funds | [ME] | works from a live Claude session |
 | 15 | **Metering ledger** — keyed on a funded session credential, **never** a user identity | [ME] | usage debits credit |
 | 16 | **Worker isolation** — browsing and payment separated, no shared ID | [ME] | no join key exists, by construction |
@@ -81,17 +81,20 @@ Scope discipline: library defaults for fingerprinting, Tor not residential proxi
 
 ## Phase 5 — Mainnet (Days 15–16) ← **the 30% criterion**
 
-Try the **server-side** route first (the production prover answers unauthenticated RPC — though a real proof there is unverified, and it's a third party's infrastructure). Fall back to going **through the wallet**, which legitimately holds the credentials.
+The server-side Mainnet proving route is verified. AVNU remains the private
+submission path when sponsorship is available; the explicit public-relay
+fallback is the verified route used for the three Aug 30 runs when AVNU had no
+remaining credits.
 
 | # | Step | Who | Done when |
 | --- | --- | --- | --- |
-| 25 | Install **Ready/Argent X**, enable privacy, fund with **a small amount of real STRK** | [YOU] | mainnet wallet ready |
-| 26 | Prove server-side mainnet proving (Route B). Fallback: drive the Ready extension — needs a **separate** Chromium+Playwright, since Obscura can't load extensions | [ME] | `wallet_strk20PrepareInvoke` returns a real proof |
-| 27 | **One real mainnet shielded transfer** | [BOTH] | tx hash on Starkscan |
-| 28 | Point the hero demo at mainnet; label mainnet vs. devnet **honestly** | [ME] | no devnet shown as mainnet |
-| 29 | *(parallel, from Day 1)* Request **mainnet prover access** via Proof of Privacy | [YOU] | grant received (fallback) |
+| 25 | ✅ Install **Ready/Argent X**, enable privacy, and fund the guardian-free account with real STRK | [YOU] | Mainnet account deployed and funded |
+| 26 | ✅ Prove server-side Mainnet actions (Route B) and use the explicit public-relay fallback when AVNU sponsorship is unavailable | [ME] | real STRK20 proofs execute through the Mainnet pool |
+| 27 | ✅ **Three real Mainnet MCP x402 runs** through STRK20 + `PaywallAnonymizer` | [BOTH] | three distinct hashes, `PaywallPaid` receipts, and HTTP 200 protected content; public-relay submitting account/timing visible |
+| 28 | Point the hero demo at Mainnet; label Mainnet vs. devnet **honestly** | [ME] | no devnet shown as Mainnet |
+| 29 | *(optional)* Request **Mainnet prover access** via Proof of Privacy | [YOU] | not required for the verified public-relay path |
 
-✅ **Gate:** a real mainnet tx hash you can show a judge.
+✅ **Gate:** three real Mainnet MCP x402 transaction hashes you can show a judge. The verified runs used the explicit public-relay fallback because AVNU sponsorship had no remaining credits, so the submitting account and payment timing are visible on-chain.
 
 ---
 
@@ -109,10 +112,10 @@ Try the **server-side** route first (the production prover answers unauthenticat
 
 ## What I need from you (the blocking list)
 
-1. **Public GitHub repo** + the application PR (Phase 0) — *today*
+1. **Public GitHub repo** + the application PR / registry entry (Phase 0) — ✅ recorded
 2. **Sepolia account + testnet STRK** (Phase 1) — *today, unblocks everything*
-3. **Ready wallet + a small amount of real mainnet STRK** (Phase 5) — by ~Day 14
-4. **Request Proof of Privacy mainnet access** — start Day 1, it's the fallback
+3. **Ready wallet + a small amount of real Mainnet STRK** (Phase 5) — ✅ used for the verified runs
+4. **Request Proof of Privacy Mainnet access** — optional while the public-relay fallback is available
 5. **Team size + your TS comfort** — decides how much I hand off vs. build
 
 ## The daily rhythm
@@ -121,4 +124,4 @@ Push *something* every day — the leaderboard rewards it and "build in public" 
 
 ## The one number to watch
 
-**Phase 1, step 10.** A private transfer working on Sepolia means the product is real. Until then, treat everything else as provisional.
+**Phase 5, step 27.** Three Mainnet MCP x402 runs completed on 2026-08-30 through the STRK20 pool and `PaywallAnonymizer`. They are real proofs and receipts, but the explicit public-relay fallback makes the submitting account and payment timing visible.

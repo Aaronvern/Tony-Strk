@@ -2,7 +2,7 @@ import styles from './setup.module.css';
 
 export const metadata = {
   title: 'Setup — tony strk',
-  description: 'Run the local STRK20 x402 MCP flow on Starknet Sepolia.',
+  description: 'Run the local STRK20 x402 MCP flow on Starknet Sepolia or Mainnet.',
 };
 
 const block = (label, command) => (
@@ -17,7 +17,7 @@ export default function SetupPage() {
     <main className={styles.page}>
       <header className={styles.header}>
         <a className={styles.wordmark} href="/">tony <b>strk</b></a>
-        <p className={styles.headerNote}>SETUP / SEPOLIA</p>
+        <p className={styles.headerNote}>SETUP / STARKNET</p>
         <a className={styles.backLink} href="/">Back to landing <span aria-hidden="true">↗</span></a>
       </header>
 
@@ -26,12 +26,13 @@ export default function SetupPage() {
         <h1>RUN THE<br /><em>PRIVATE ROUTE.</em></h1>
         <p className={styles.lede}>
           Set up a local Tony Strk server that browses through Tor and can pay a
-          compatible HTTP x402 paywall with shielded test STRK. This guide uses
-          real Sepolia contracts and a temporary public HTTPS merchant URL.
+          compatible HTTP x402 paywall with shielded STRK. Sepolia is the safe
+          default; Mainnet uses the same MCP flow with real STRK.
         </p>
         <p className={styles.warning}>
-          <strong>Testnet only.</strong> The guided payment flow is for Starknet
-          Sepolia test funds. Mainnet paywall settlement is not supported.
+          <strong>Two hosting boundaries.</strong> The key-holding MCP stays local
+          at <code>127.0.0.1:8787/mcp</code>. The merchant must have a public HTTPS
+          origin, either a temporary tunnel for testing or a permanent deployment.
         </p>
       </div>
 
@@ -72,8 +73,8 @@ npm run setup`)}
               and transaction values only.
             </p>
             <ol className={styles.substeps}>
-              <li>Run <code>npm run wallet:create</code>. Save the printed public Sepolia address.</li>
-              <li>Fund that address with public Sepolia test STRK. The first shield must cover the private balance and the pool fee.</li>
+              <li>Run <code>npm run wallet:create</code>. Save the printed public address for the network you selected.</li>
+              <li>Fund that address with public STRK on the same network. The first shield must cover the private balance, pool fee, and gas.</li>
               <li>Call <code>wallet_status</code>. When it reports <code>needs_deployment</code>, call <code>wallet_deploy</code>.</li>
               <li>Obtain an AVNU key from the AVNU portal, then run <code>npm run paymaster:set</code> to store it.</li>
               <li>After <code>wallet_status</code> reports <code>ready</code>, call <code>wallet_shield</code> with the public STRK amount to shield.</li>
@@ -81,8 +82,8 @@ npm run setup`)}
             </ol>
             {block('Wallet creation', 'npm run wallet:create')}
             <p className={styles.note}>
-              The pool fee is read from the external stack. Do not hardcode it
-              in a UI or assume the Sepolia quote is a mainnet cost.
+              The pool fee is read from the external stack. Always quote it on
+              the selected network before funding a live wallet.
             </p>
           </section>
         </li>
@@ -95,9 +96,8 @@ npm run setup`)}
               Set a helper contract you have chosen to trust and a per-resource
               ceiling. <code>PAYWALL_ANONYMIZER_ADDRESS</code> is a payer trust
               decision: the paywall&apos;s invoke leg sends the withdrawn amount to
-              that contract. The default Sepolia RPC below supports the class
-              lookup used by <code>wallet_status</code>; an explicit RPC may
-              override it.
+              that contract. <code>NETWORK</code> selects the matching chain,
+              pool, prover, discovery service, paymaster, and explorer.
             </p>
             <p>
               Place these non-secret settings in the repository&apos;s gitignored
@@ -110,6 +110,30 @@ npm run setup`)}
 PAYWALL_MAX_PRICE=0.5
 STARKNET_RPC_URL=https://starknet-sepolia-rpc.publicnode.com
 TOR_SOCKS_PROXY=socks5://127.0.0.1:9050`)}
+            {block('Mainnet settings — sponsored AVNU path', `NETWORK=mainnet
+PAYWALL_ANONYMIZER_ADDRESS=YOUR_MAINNET_HELPER_ADDRESS
+PAYWALL_MAX_PRICE=0.5
+TOR_SOCKS_PROXY=socks5://127.0.0.1:9050`)}
+            <details className={styles.details}>
+              <summary>Mainnet fallback when AVNU sponsorship is unavailable</summary>
+              <p>
+                The explicit public relay fallback still proves and executes the
+                real STRK20 action, but the configured account submits it and is
+                visible on-chain. It is not anonymous at the account-to-payment
+                layer. The account must first approve the Mainnet privacy pool to
+                collect its protocol fee. Set a hard gas ceiling and, when needed,
+                a private STRK refill back to the submitting account.
+              </p>
+              {block('Public-relay fallback (real Mainnet STRK)', `NETWORK=mainnet
+PUBLIC_PRIVACY_RELAY=true
+PUBLIC_PRIVACY_RELAY_MAX_FEE=7
+PUBLIC_PRIVACY_RELAY_REFILL=4.6`)}
+              <p>
+                Treat the fee cap and refill as operator-selected limits, not
+                universal defaults. Estimate current fees and fund both public
+                gas and the shielded payment balance before enabling this mode.
+              </p>
+            </details>
             <p className={styles.note}>
               Keep API keys and wallet material in the macOS Keychain. The
               settings above are addresses, limits, and service URLs, not
@@ -140,7 +164,7 @@ cloudflared tunnel --url http://127.0.0.1:8788`)}
               402 flow. The MCP correctly rejects localhost for merchant payment
               requests because Tor cannot reach a local listener.
             </p>
-            {block('Local MCP server', 'TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server')}
+            {block('Local MCP server (not hosted on Vercel)', 'TOR_SOCKS_PROXY=socks5://127.0.0.1:9050 npm run start:server')}
             <details className={styles.details}>
               <summary>Legacy script versus the recommended MCP flow</summary>
               <p>
@@ -188,7 +212,7 @@ cloudflared tunnel --url http://127.0.0.1:8788`)}
               Deterministic tests spend nothing. The verifier checks the live MCP,
               Tor, tool registration, and wallet status before it attempts a
               payment. Add <code>--live</code> only when the shielded note is
-              mature and you intend to spend Sepolia test STRK.
+              mature and you intend to spend STRK on the configured network.
             </p>
             {block('Deterministic and preflight checks', `npm test
 npm run verify:mcp
@@ -215,10 +239,10 @@ npm run verify:x402 -- --url https://<your-tunnel-host>/article/agent-privacy`)}
               not logged-in browsing.
             </p>
             <p className={styles.warning}>
-              <strong>Sepolia scope.</strong> The guided x402 verifier is
-              testnet-only. Mainnet pool operations and mainnet paywall settlement
-              are separate concerns; do not treat a Sepolia proof or test STRK as
-              mainnet readiness.
+              <strong>Mainnet scope.</strong> The AVNU-sponsored route keeps the
+              submitting account out of the transaction. The public-relay fallback
+              does not: its relayer and payment timing are public on-chain even
+              though the STRK20 proof and merchant receipt are genuine.
             </p>
             <a className={styles.primaryAction} href="/">Return to the landing page <span aria-hidden="true">↗</span></a>
           </section>
@@ -227,7 +251,7 @@ npm run verify:x402 -- --url https://<your-tunnel-host>/article/agent-privacy`)}
 
       <footer className={styles.footer}>
         <a className={styles.wordmark} href="/">tony <b>strk</b></a>
-        <p>Local-first. Shielded testnet payments. No secrets in the browser.</p>
+        <p>Local MCP. Public HTTPS merchant. No secrets in the browser.</p>
       </footer>
     </main>
   );

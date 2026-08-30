@@ -25,15 +25,25 @@ const allowedHosts = process.env.MCP_ALLOWED_HOSTS?.split(",")
   .map((entry) => entry.trim())
   .filter(Boolean);
 
+const network = process.env.NETWORK ?? "sepolia";
+if (network !== "sepolia" && network !== "mainnet") {
+  throw new Error(
+    `Invalid NETWORK ${JSON.stringify(network)}. Expected "sepolia" or "mainnet".`,
+  );
+}
+const isMainnet = network === "mainnet";
+const x402Network = isMainnet ? "starknet:SN_MAIN" : "starknet:SN_SEPOLIA";
+const publicPrivacyRelay = process.env.PUBLIC_PRIVACY_RELAY === "true";
 const POOL =
   process.env.POOL_ADDRESS ??
-  "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91";
+  (isMainnet
+    ? "0x040337b1af3c663e86e333bab5a4b28da8d4652a15a69beee2b677776ffe812a"
+    : "0x254a6b2997ef52e9f830ce1f543f6b29768295e8d17e2267d672c552cfe0d91");
 const TOKEN =
   process.env.STRK_TOKEN_ADDRESS ??
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-const network = process.env.NETWORK ?? "sepolia";
 const explorerBase =
-  network === "mainnet" ? "https://starkscan.co" : "https://sepolia.starkscan.co";
+  isMainnet ? "https://starkscan.co" : "https://sepolia.starkscan.co";
 
 // The Keychain is the right default and exists only on macOS. Where the
 // environment names a key instead, use it — and the env store says loudly that
@@ -41,16 +51,28 @@ const explorerBase =
 const fromEnv = envWalletConfigured(process.env);
 
 const wallet = createWalletManager({
-  store: fromEnv ? createEnvWalletStore(process.env) : createKeychainStore(),
+  store: fromEnv
+    ? createEnvWalletStore(process.env)
+    : createKeychainStore({ serviceName: isMainnet ? "tony-strk.mainnet.wallet" : undefined }),
   paymaster: fromEnv ? createEnvPaymasterStore(process.env) : createPaymasterKeyStore(),
-  rpcUrl: process.env.STARKNET_RPC_URL ?? "https://starknet-sepolia-rpc.publicnode.com",
+  rpcUrl:
+    process.env.STARKNET_RPC_URL ??
+    (isMainnet
+      ? "https://api.zan.top/public/starknet-mainnet/rpc/v0_10"
+      : "https://starknet-sepolia-rpc.publicnode.com"),
   provingUrl:
     process.env.PROVING_SERVICE_URL ??
-    "https://transaction-prover.alpha-sepolia.sw-dev.io",
+    (isMainnet
+      ? "https://cloud.argent-api.com/v1/privacy/proving"
+      : "https://transaction-prover.alpha-sepolia.sw-dev.io"),
   indexerUrl:
     process.env.INDEXER_URL ??
-    "https://discovery-service.alpha-sepolia.sw-dev.io",
-  paymasterUrl: process.env.PAYMASTER_URL ?? "https://sepolia.paymaster.avnu.fi",
+    (isMainnet
+      ? "https://cloud.argent-api.com/v1/privacy/discovery"
+      : "https://discovery-service.alpha-sepolia.sw-dev.io"),
+  paymasterUrl:
+    process.env.PAYMASTER_URL ??
+    (isMainnet ? "https://starknet.paymaster.avnu.fi" : "https://sepolia.paymaster.avnu.fi"),
   pool: POOL,
   token: TOKEN,
   explorerBase,
@@ -58,9 +80,17 @@ const wallet = createWalletManager({
   // string "SN_SEPOLIA" fails with "Cannot convert SN_SEPOLIA to a BigInt" —
   // and only at spend time, since every test drives a fake wallet.
   chainId:
-    network === "mainnet"
+    isMainnet
       ? constants.StarknetChainId.SN_MAIN
       : constants.StarknetChainId.SN_SEPOLIA,
+  publicPrivacyRelay,
+  publicFeeCapWei: process.env.PUBLIC_PRIVACY_RELAY_MAX_FEE
+    ? toWei(process.env.PUBLIC_PRIVACY_RELAY_MAX_FEE)
+    : undefined,
+  publicRelayRefillWei: process.env.PUBLIC_PRIVACY_RELAY_REFILL
+    ? toWei(process.env.PUBLIC_PRIVACY_RELAY_REFILL)
+    : undefined,
+  requireSnip36Rpc: isMainnet,
   // Off until real relay, gateway and key-config values exist: encryption
   // without an independently operated relay is confidentiality, not anonymity.
   // Opt in explicitly once they do.
@@ -100,6 +130,7 @@ const app = createApp(
       ? {
           getWallet: () => wallet.getPayWallet(),
           getPayerAddress: () => wallet.status().then((s) => s.address),
+          network: x402Network,
           trustedAnonymizers,
           maxPrice,
           asset: TOKEN,

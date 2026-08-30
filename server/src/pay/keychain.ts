@@ -9,6 +9,10 @@ const PAYMASTER_SERVICE = "tony-strk.sepolia.paymaster";
 const ACCOUNT = "default";
 
 type KeychainExec = (args: string[]) => Promise<string>;
+interface KeychainDeps {
+  exec?: KeychainExec;
+  serviceName?: string;
+}
 
 export interface KeychainStore {
   load(): Promise<WalletSecret | null>;
@@ -71,9 +75,9 @@ function createGenericStore(
 }
 
 export function createKeychainStore(
-  deps: { exec?: KeychainExec } = {},
+  deps: KeychainDeps = {},
 ): KeychainStore {
-  const store = createGenericStore(WALLET_SERVICE, deps);
+  const store = createGenericStore(deps.serviceName ?? WALLET_SERVICE, deps);
   return {
     async load() {
       const value = await store.load();
@@ -89,7 +93,7 @@ export function createKeychainStore(
 }
 
 export function createPaymasterKeyStore(
-  deps: { exec?: KeychainExec } = {},
+  deps: KeychainDeps = {},
 ): PaymasterKeyStore {
-  return createGenericStore(PAYMASTER_SERVICE, deps);
+  return createGenericStore(deps.serviceName ?? PAYMASTER_SERVICE, deps);
 }

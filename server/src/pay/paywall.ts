@@ -70,6 +70,8 @@ export interface PaymentTerms {
 }
 
 export interface ParseOptions {
+  /** x402 network identifier expected from the merchant. Sepolia by default. */
+  network?: string;
   /** Anonymizer addresses the payer is willing to call. Required. */
   trustedAnonymizers: string[];
   /** Most the payer will spend on one resource, in the asset's smallest unit. */
@@ -198,8 +200,11 @@ export function parsePaymentRequiredHeader(value: string, options: ParseOptions)
   ])) {
     throw new Error("That 402 has an invalid payment helper configuration.");
   }
-  if (offer.network !== NETWORK) {
-    throw new Error(`That 402 uses network ${JSON.stringify(offer.network)}, not ${NETWORK}.`);
+  const expectedNetwork = options.network ?? NETWORK;
+  if (offer.network !== expectedNetwork) {
+    throw new Error(
+      `That 402 uses network ${JSON.stringify(offer.network)}, not ${expectedNetwork}.`,
+    );
   }
   if (extra.paymentFlow !== PAYMENT_FLOW) {
     throw new Error(`That 402 uses payment flow ${JSON.stringify(extra.paymentFlow)}, not ${PAYMENT_FLOW}.`);

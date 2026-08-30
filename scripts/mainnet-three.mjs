@@ -422,9 +422,11 @@ async function run() {
 
 try {
   await run();
-} catch {
+} catch (error) {
   console.error(
-    "mainnet:three stopped before all three verified receipts completed",
+    `mainnet:three stopped before all three verified receipts completed: ${
+      error instanceof Error ? error.message : "unknown error"
+    }`,
   );
   process.exitCode = 1;
 }

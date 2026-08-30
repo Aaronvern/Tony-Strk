@@ -13,6 +13,7 @@ const PAY_TO = "0x4d45524348414e54";
 const RESOURCE_HASH = "0xffa430bc25381cb7e9c9cb8d01ea317794dfb78741a7748fecd59c796f3b75";
 const URL = "https://example.com/article/agent-privacy";
 const NETWORK = "starknet:SN_SEPOLIA";
+const MAINNET_NETWORK = "starknet:SN_MAIN";
 const PRICE = 50_000_000_000_000_000n;
 const RESOURCE = {
   url: URL,
@@ -131,6 +132,25 @@ test("a v2 PAYMENT-REQUIRED challenge is settled and the unlocked page comes bac
   assert.equal(result.amountWei, PRICE.toString());
   assert.equal(result.explorerUrl, "https://sepolia.starkscan.co/tx/0xabc123");
   assert.match(result.text, /The article/);
+  assert.equal(submitted.length, 1);
+});
+
+test("settlement passes a configured mainnet network to PAYMENT-REQUIRED validation", async () => {
+  const { deps, submitted } = harness({
+    network: MAINNET_NETWORK,
+    fetchImpl: (_target, options) =>
+      options.headers?.["PAYMENT-SIGNATURE"]
+        ? unlocked({
+          success: true,
+          transaction: "0xabc123",
+          network: MAINNET_NETWORK,
+          amount: PRICE.toString(),
+        })
+        : paywall(termsBody({ network: MAINNET_NETWORK })),
+  });
+
+  const result = await settlePaywall({ url: URL }, deps);
+  assert.equal(result.paid, true);
   assert.equal(submitted.length, 1);
 });
 

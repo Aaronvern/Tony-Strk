@@ -15,6 +15,7 @@ const PAY_TO = "0x4d45524348414e54";
 const RESOURCE_HASH = "0xffa430bc25381cb7e9c9cb8d01ea317794dfb78741a7748fecd59c796f3b75";
 const URL = "https://ledger.example/article/agent-privacy";
 const NETWORK = "starknet:SN_SEPOLIA";
+const MAINNET_NETWORK = "starknet:SN_MAIN";
 const PRICE = "50000000000000000";
 
 const RESOURCE = {
@@ -86,6 +87,13 @@ test("PAYMENT-REQUIRED must be canonical standard Base64 JSON", () => {
 test("only the Sepolia network and upfront flow are accepted", () => {
   assert.throws(() => parse(required({ network: "starknet:SN_MAIN" })), /network/i);
   assert.throws(() => parse(required({}, { paymentFlow: "authorization" })), /upfront/i);
+});
+
+test("the configured mainnet network is accepted and a mismatch is rejected", () => {
+  const options = { ...OPTIONS, network: MAINNET_NETWORK };
+  const terms = parse(required({ network: MAINNET_NETWORK }), options);
+  assert.equal(terms.network, MAINNET_NETWORK);
+  assert.throws(() => parse(required(), options), /network/i);
 });
 
 test("the top-level resource URL is required and query/fragment-insensitive", () => {

@@ -27,18 +27,21 @@ the local wallet must be ready, a helper must be named in
 8. The `wallet_status` tool tells the agent when it must create, fund, deploy,
    or configure the paymaster for the local wallet.
 
-9. The `wallet_shield` tool deposits public Sepolia test STRK into the STRK20
+9. The `wallet_shield` tool deposits public STRK into the configured STRK20
    pool and reports the receipt and conservative `spendableAfterBlock`.
 
 10. The `pay` tool sends a chosen amount to a Starknet address from the shielded
-    pool; `pay_paywall` handles the strict x402 v2 402 → payment → retry flow.
+    pool; `pay_paywall` handles the strict x402 v2 402 → payment → retry flow
+    on the configured network.
 
 11. The payer verifies the merchant's helper, asset, resource, network, and
     price ceiling before generating a proof. The merchant verifies the public
     `PaywallPaid` receipt before serving protected content.
 
 12. `verify:x402` checks the live MCP, Tor, tool registration, and wallet status
-    without spending by default. Its `--live` mode is opt-in.
+    without spending by default. Its `--live` mode is opt-in; three live Mainnet
+    MCP x402 runs completed on 2026-08-30 through STRK20 and `PaywallAnonymizer`
+    ([transaction record](TRANSACTIONS.md)).
 
 ## What Does Not Work Yet
 
@@ -48,8 +51,12 @@ the local wallet must be ready, a helper must be named in
 2. The active fetcher is not a browser. It has no JavaScript execution, login
    support, cookie storage, or fresh Tor circuit guarantee per request.
 
-3. The guided x402 payment flow is Sepolia-only. Mainnet pool operations are a
-   separate capability; do not present them as mainnet paywall settlement.
+3. The guided x402 payment flow supports the configured network. Three Mainnet
+   MCP x402 runs completed on 2026-08-30 through the STRK20 pool and
+   `PaywallAnonymizer`, using the explicit public-relay fallback because AVNU
+   sponsorship had no remaining credits. The submitting account and payment
+   timing are visible on-chain; do not describe those runs as private relay
+   settlement.
 
 4. A live paywall run needs a public HTTPS merchant URL. Tor cannot reach the
    merchant's loopback listener, and the MCP URL policy correctly rejects it.
@@ -104,20 +111,24 @@ Run the following lifecycle in order:
 1. Run `npm run wallet:setup` on macOS. It creates the wallet and stores the
    AVNU paymaster key in Keychain when needed.
 
-2. Fund the printed Sepolia address with public test STRK. The first shield
-   must cover the desired private balance and the current pool fee.
+2. Fund the printed address with public STRK. Use Sepolia test STRK for a
+   rehearsal; Mainnet requires real STRK. The first shield must cover the
+   desired private balance and the current pool fee.
 
 3. Call `wallet_status` from Codex or Claude Code. When the state is
    `needs_deployment`, call `wallet_deploy`.
 
-4. If the paymaster state is still missing, obtain an AVNU key from the AVNU
-   portal and run `npm run paymaster:set`.
+4. For private AVNU sponsorship, obtain an AVNU key from the AVNU portal and
+   run `npm run paymaster:set`. The verified Mainnet fallback instead requires
+   explicitly setting `NETWORK=mainnet` and `PUBLIC_PRIVACY_RELAY=true`.
 
 5. When `wallet_status` reports `ready`, call `wallet_shield` with a positive
    decimal amount. It does not pay a merchant automatically.
 
 6. Wait for the returned `spendableAfterBlock`. A new deployment, top-up, or
-   private note needs 12 blocks of maturity before the next proof.
+   private note needs 12 blocks of maturity before the next proof. The verified
+   Mainnet runs used the explicit public relay, so their submitting account and
+   payment timing remain public.
 
 7. Set `PAYWALL_ANONYMIZER_ADDRESS` to a helper contract you have chosen to
    trust, then start the MCP server with the configured Tor proxy.
@@ -169,7 +180,9 @@ npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy --live
    Project endpoint through MCP.
 
 5. Run `npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy` for a no-spend
-   preflight, or append `--live` for an opt-in Sepolia payment.
+   preflight, or append `--live` for an opt-in payment on the configured
+   network. The Aug 30 Mainnet runs used `PUBLIC_PRIVACY_RELAY=true` because
+   AVNU sponsorship was unavailable.
 
 ## Code References
 
@@ -192,7 +205,8 @@ npm run verify:x402 -- --url https://PUBLIC_HOST/article/agent-privacy --live
    when a trusted anonymizer is configured.
 
 7. [Live x402 check](../server/verify-x402.mjs) proves the MCP/Tor preflight and
-   optionally spends test STRK against a public merchant URL.
+   optionally spends STRK against a public merchant URL on the configured
+   network.
 
 8. [Local design](superpowers/specs/2026-08-21-local-mcp-hardening-design.md)
    states the active security boundary.

@@ -35,6 +35,24 @@ test("the Keychain store treats a missing secret as an uncreated wallet", async 
   assert.equal(await store.load(), null);
 });
 
+test("the wallet Keychain service can be selected independently", async () => {
+  const calls: string[][] = [];
+  let secret = "";
+  const store = createKeychainStore({
+    serviceName: "tony-strk.mainnet.wallet",
+    exec: async (args) => {
+      calls.push(args);
+      if (args[0] === "find-generic-password") return secret;
+      secret = args[args.indexOf("-w") + 1];
+      return "";
+    },
+  });
+
+  await store.save(wallet);
+  assert.deepEqual(await store.load(), wallet);
+  assert.ok(calls.every((args) => args[args.indexOf("-s") + 1] === "tony-strk.mainnet.wallet"));
+});
+
 test("the Keychain stores the paymaster key separately from the wallet", async () => {
   let secret = "";
   const store = createPaymasterKeyStore({

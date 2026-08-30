@@ -4,7 +4,7 @@ import test from "node:test";
 
 const pagePath = new URL("../app/setup/page.js", import.meta.url);
 
-test("setup page documents the complete Sepolia wallet and x402 path", async () => {
+test("setup page documents both the sponsored and mainnet public-relay x402 paths", async () => {
   const page = await readFile(pagePath, "utf8");
 
   assert.equal((page.match(/<h1\b/g) || []).length, 1);
@@ -26,7 +26,13 @@ test("setup page documents the complete Sepolia wallet and x402 path", async () 
     "verify:x402",
     "--live",
     "Sepolia",
-    "testnet only",
+    "Mainnet",
+    "NETWORK=mainnet",
+    "PUBLIC_PRIVACY_RELAY=true",
+    "PUBLIC_PRIVACY_RELAY_MAX_FEE",
+    "PUBLIC_PRIVACY_RELAY_REFILL",
+    "public on-chain",
+    "127.0.0.1:8787/mcp",
   ]) {
     assert.match(page, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
   }

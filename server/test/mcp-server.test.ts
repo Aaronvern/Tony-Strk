@@ -69,7 +69,7 @@ test("wallet tools tell an MCP client how to prepare automatic payments", async 
   assert.deepEqual(result.structuredContent, { state: "needs_funding", address: "0x123" });
 
   const shieldTool = tools.find((tool) => tool.name === "wallet_shield");
-  assert.match(shieldTool?.description ?? "", /public test STRK/i);
+  assert.match(shieldTool?.description ?? "", /public STRK/i);
   assert.match(shieldTool?.description ?? "", /12 blocks?/i);
 
   const shieldResult = await client.callTool({
@@ -87,6 +87,29 @@ test("wallet tools tell an MCP client how to prepare automatic payments", async 
     Object.keys(shieldResult.structuredContent as Record<string, unknown>).sort(),
     ["amountWei", "explorerUrl", "receiptBlock", "spendableAfterBlock", "transactionHash"],
   );
+});
+
+test("wallet tool metadata does not pin the client to Sepolia", async () => {
+  const client = await connect({
+    wallet: {
+      status: async () => ({ state: "ready" }),
+      create: async () => ({ state: "needs_funding" }),
+      deploy: async () => ({ state: "ready" }),
+      shield: async () => ({
+        transactionHash: "0xshielded",
+        amountWei: "1",
+        explorerUrl: "https://starkscan.co/tx/0xshielded",
+        receiptBlock: 100,
+        spendableAfterBlock: 112,
+      }),
+    },
+  });
+
+  const { tools } = await client.listTools();
+  for (const name of ["wallet_status", "wallet_create", "wallet_deploy", "wallet_shield"]) {
+    const tool = tools.find((entry) => entry.name === name);
+    assert.doesNotMatch(`${tool?.title ?? ""} ${tool?.description ?? ""}`, /Sepolia/i);
+  }
 });
 
 test("a paywalled page tells the client that payment is required", async () => {
