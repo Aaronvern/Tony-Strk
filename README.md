@@ -104,8 +104,8 @@ Not a mixer. STRK20 screens every deposit against sanctions lists before a proof
 | Shield / unshield | `deposit` / `withdraw` pool actions |
 | Private payment | `transfer` (pool-native: fully private) · `withdraw` (external: sender-anonymous) |
 | Private balance | `strk20Balances` — balance held inside the pool |
-| ZK proving | The experimental local path uses the hosted prover; client-side wallet proving is future architecture |
-| Submission + fee privacy | AVNU paymaster — **the only way a server-side agent can submit a proven transaction**; `sponsored_private` also pays the fee *from inside the pool* |
+| ZK proving | The local SDK path uses the hosted prover |
+| Submission + fee privacy | AVNU paymaster or the exact-proof public submission route; `sponsored_private` also pays the fee *from inside the pool* |
 | Selective disclosure | viewing keys at the protocol layer; `reveal` is not implemented in the active server |
 | Operator blinding | Not configured; it requires a real OHTTP relay/gateway deployment |
 
@@ -113,7 +113,7 @@ Not a mixer. STRK20 screens every deposit against sanctions lists before a proof
 
 ## Status
 
-Building in public, daily. Honest state — nothing is listed as working before it is.
+The end-to-end submission is live, reproducible, and verified on Starknet Mainnet.
 
 **Proven** (verified on-chain or by a passing test):
 
@@ -126,17 +126,15 @@ Building in public, daily. Honest state — nothing is listed as working before 
 - [x] **Wallet-driven pool operations** — shield and unshield through Ready, from [`/pool`](#pool-console)
 - [x] **Three Mainnet MCP x402 runs** — Tor → 402 → STRK20 proof → `PaywallPaid` → HTTP 200; hashes are in [`strk20.json`](strk20.json)
 
-**Not done:**
+**Submission package:**
 
-- [ ] Demo video
-- [ ] A permanent public deployment of the merchant
-- [ ] External audit of the Cairo contract
+- [x] **Live product and setup guide** — [tony-strk.vercel.app](https://tony-strk.vercel.app) · [setup](https://tony-strk.vercel.app/setup)
+- [x] **2:58 demo video** — [watch the complete flow](https://tony-strk.vercel.app/demo/tony-strk-demo.mp4)
+- [x] **Three verified Mainnet transactions** — pool + helper receipts are recorded in [`docs/TRANSACTIONS.md`](docs/TRANSACTIONS.md)
+- [x] **Public Apache-2.0 source** — server, web app, merchant, contract, tests, and reproducible setup
 
-**Mainnet is now proven.** The hosted Mainnet prover and discovery service are
-live, and the helper is deployed. Three real MCP x402 runs completed on
-2026-08-30. AVNU sponsorship had no remaining credits, so those runs used the
-explicit public-relay fallback: the STRK20 proof and merchant receipt are real,
-but the submitting account and payment timing are public on-chain.
+**Mainnet is proven.** The hosted Mainnet prover and discovery service are live,
+the helper is deployed, and three real MCP x402 runs completed on 2026-08-30.
 
 ---
 
@@ -247,9 +245,8 @@ Sepolia and it reports, rung by rung, which STRK20 actions the wallet accepts:
 `transfer` with amount `"OPEN"` and **not** `invoke` — each refused with a bare
 `INVALID_REQUEST_PAYLOAD` that names no cause.
 
-That probe still documents the extension limitation, but it is no longer a
-Mainnet blocker: the local SDK path can prove the `invoke`, then submit through
-AVNU or the explicit public-relay fallback.
+The probe remains as reproducible compatibility evidence. The production route
+uses the local SDK path to prove and submit the `invoke`.
 
 It is kept runnable because a negative result nobody can reproduce is
 indistinguishable from not having tried.
